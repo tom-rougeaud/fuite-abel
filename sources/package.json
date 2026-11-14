@@ -1,0 +1,14 @@
+{
+  "name": "fuite-abel",
+  "version": "1.0.0",
+  "description": "La fuite d’Abel — jeu de course 3D (sources)",
+  "scripts": {
+    "build": "python3 build.py"
+  },
+  "author": "Tom Rougeaud",
+  "license": "CC-BY-NC-4.0",
+  "dependencies": {
+    "esbuild": "^0.28.2",
+    "three": "^0.187.0"
+  }
+}
