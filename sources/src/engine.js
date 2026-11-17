@@ -6,9 +6,10 @@ import { coinMaterials, envMap } from './textures.js';
 import { badgeTexture } from './icons.js';
 
 export const LANE = 3.2, LX = [-LANE, 0, LANE];
-export const SPEEDS = [8, 10.5, 13];
+/* vitesse de défilement (m/s) : seul le décor accélère, pas la cadence des jambes */
+export const SPEEDS = [13, 17, 21];
 /* 15 niveaux : 5 décors × (jour, soir, nuit). Plus on avance, plus c’est long, rapide et chargé. */
-export const LEVELS = Array.from({ length: 15 }, (_, i) => ({ theme: (i % 5) + 5 * Math.floor(i / 5), len: 800 + 100 * i, diff: 0.3 + 0.05 * i, vmul: 1 + 0.01 * i, seed: 11 * (i + 1) }));
+export const LEVELS = Array.from({ length: 15 }, (_, i) => ({ theme: (i % 5) + 5 * Math.floor(i / 5), len: 1000 + 150 * i, diff: 0.4 + 0.05 * i, vmul: 1 + 0.01 * i, seed: 11 * (i + 1) }));
 export const POWERS = { aimant: { icon: 'magnet', bg: '#c0392b', dur: 9 }, bouclier: { icon: 'shield', bg: '#2f7fd0', dur: 14 }, envol: { icon: 'balloon', bg: '#d9578a', dur: 5.5 }, x2: { icon: 'x2', bg: '#7a4fb8', dur: 10 }, coeur: { icon: 'heart', bg: '#d1344a', dur: 0 } };
 const SIZE = { sedan: [4.8, 1.9, 1.7], pickup: [5.6, 2.05, 2.1], van: [5.2, 2.1, 2.45], truck: [17.6, 2.55, 4.0], bus: [11.5, 2.5, 3.0], busramp: [18.5, 2.5, 3.0], barrier: [0.7, 2.6, 0.9], beam: [0.6, 3.3, 2.0] };
 const RAMP = 7;
@@ -52,15 +53,15 @@ export function genLevel(li, si) {
     // autres voies
     for (let lane = 0; lane < 3; lane++) {
       if (lane === newSafe) continue;
-      const pBlock = (kind === 'free' ? 0.25 : 0.4) + 0.45 * diff;
+      const pBlock = Math.min(0.93, (kind === 'free' ? 0.4 : 0.55) + 0.4 * diff);
       if (rows < 2) continue;
       const q2 = r();
       if (q2 < pBlock) { const k = (() => { const z = r(); return z < 0.3 ? 'sedan' : z < 0.5 ? 'pickup' : z < 0.7 ? 'van' : z < 0.8 ? 'truck' : 'bus'; })(); const shift = r() * 2; rowLen = Math.max(rowLen, addObs(k, lane, d + shift) + shift); }
-      else if (q2 < pBlock + 0.2) { addObs(r() < 0.5 ? 'barrier' : 'beam', lane, d + r() * 2); }
+      else if (q2 < Math.min(0.99, pBlock + 0.25)) { addObs(r() < 0.5 ? 'barrier' : 'beam', lane, d + r() * 2); }
     }
     rows++; prevSafe = newSafe; safe = newSafe; prevEnd = d + rowLen;
     // bonus
-    if (d - lastPick > 130 && rows > 3) {
+    if (d - lastPick > 190 && rows > 3) {
       const t = r(), type = t < 0.28 ? 'aimant' : t < 0.52 ? 'bouclier' : t < 0.7 ? 'envol' : t < 0.88 ? 'x2' : 'coeur';
       const pd = prevEnd + 5;
       picks.push({ d: pd, x: LX[newSafe], type, got: false });
@@ -68,8 +69,9 @@ export function genLevel(li, si) {
       lastPick = d;
     }
     /* série : un second obstacle suit de près sur la même voie (saute, puis glisse) */
-    lastCombo = combo; combo = rows > 4 && !lastCombo && (kind === 'barrier' || kind === 'beam') && r() < 0.1 + 0.32 * diff;
-    d = prevEnd + (combo ? v * 1.0 + 4 : Math.max(11.5, v * (1.5 - 0.3 * diff) + r() * 5));
+    lastCombo = combo; combo = rows > 3 && !lastCombo && (kind === 'barrier' || kind === 'beam') && r() < 0.18 + 0.4 * diff;
+    const vf = v * (1 + 0.25 * Math.min(1, d / L.len)); /* vitesse réelle à cet endroit : l’écart reste faisable (un saut dure 0,77 s) */
+    d = prevEnd + (combo ? vf * 0.8 + 4 : Math.max(9, vf * (0.9 + 0.1 * (1 - Math.min(1, diff))) + r() * 0.14 * vf));
   }
   // fin de parcours : dernière ligne de pièces vers l’arche
   const g0 = prevEnd + 2; for (let dd = g0; dd < L.len - 4; dd += 3) { const u = (dd - g0) / Math.max(1, L.len - 4 - g0); coin(dd, LX[safe] + (0 - LX[safe]) * sm(0.1, 0.5, u), 1.0); }
@@ -97,6 +99,7 @@ export function createEngine(canvas, cb = {}) {
   let coinStart = 0;
   const shop = { focus: 'body', yaw: 0, subject: 'runner', yawNow: 0 };
   const hudT = { t: 0 };
+  const CADENCE = 15; // rad/s : foulée constante, quelle que soit la vitesse de défilement
 
   function applyQuality() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2), steps = [0.6, 0.8, Math.min(dpr, 1.5), Math.min(dpr, 2)];
@@ -148,8 +151,8 @@ export function createEngine(canvas, cb = {}) {
     clearRun(); S.mode = 'play'; S.paused = false; platform.visible = false;
     lev = genLevel(li, si); lev.li = li; lev.totalCoins = lev.coins.length;
     S.lastZ = 0; S.themeIdx === lev.theme && S.scen && (S.scen.dispose(), S.scen = null, S.themeIdx = -1); setTheme(lev.theme);
-    Object.assign(P, { d: 0, x: 0, y: 0, vy: 0, lane: 1, grounded: true, coyote: 0, jumpBuf: 0, slide: 0, inv: 0, hitT: 9, hearts: 3, coins: 0, phi: 0, fly: 0, shield: 0, magnet: 0, x2: 0, lost: 0, tired: 0, speedMul: 1, state: 'run', endT: 0, camShake: 0, flash: 0 });
-    Object.assign(C, { gap: 14, x: 1.2, phi: 0, nextVisit: 14 + Math.random() * 6, vphase: 0, vt: 0, near: 0 });
+    Object.assign(P, { d: 0, x: 0, y: 0, vy: 0, lane: 1, grounded: true, coyote: 0, jumpBuf: 0, slide: 0, inv: 0, hitT: 9, hearts: 3, coins: 0, phi: 0, fly: 0, shield: 0, magnet: 0, x2: 0, lost: 0, tired: 0, speedMul: 1, state: 'run', endT: 0, camShake: 0, flash: 0, vx: 0, airT: 0, jumped: false, land: 0, sk: 0, jk: 0, ended: false });
+    Object.assign(C, { gap: 14, x: 1.2, phi: 0, nextVisit: 8 + Math.random() * 4, vphase: 0, vt: 0, near: 0 });
     const cm = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.34, 0.34, 0.07, 28), coinMaterials(), 220); cm.frustumCulled = false; cm.count = 0; cm.castShadow = false; scene.add(cm); coinMesh = cm;
     // arche d’arrivée
     finishGroup = new THREE.Group(); const post = new THREE.MeshStandardMaterial({ color: '#e9e4d6', roughness: 0.6 });
@@ -176,8 +179,9 @@ export function createEngine(canvas, cb = {}) {
   function hurt() {
     if (P.inv > 0 || P.fly > 0 || P.state !== 'run') return;
     if (P.shield > 0) { P.shield = 0; P.inv = 1.2; emit('shield'); return; }
-    P.hearts--; P.inv = 1.8; P.hitT = 0; P.camShake = 0.5; P.flash = 1; emit('hit');
-    C.near = 5.5;
+    const close = C.near > 0 || C.vphase === 1 || C.vphase === 2; /* gardien tout près : le choc coûte 2 cœurs */
+    P.hearts -= close ? 2 : 1; P.inv = 1.8; P.hitT = 0; P.camShake = 0.5; P.flash = 1; emit('hit');
+    C.near = 7;
     if (P.hearts <= 0) { P.state = 'lose'; P.endT = 0; emit('lose'); }
   }
   function collide() {
@@ -238,23 +242,25 @@ export function createEngine(canvas, cb = {}) {
   function stepPlay(dt) {
     P.hitT += dt; P.inv = Math.max(0, P.inv - dt); P.slide = Math.max(0, P.slide - dt); P.magnet = Math.max(0, P.magnet - dt); P.x2 = Math.max(0, P.x2 - dt); P.fly = Math.max(0, P.fly - dt);
     P.flash = Math.max(0, P.flash - dt * 2); P.camShake = Math.max(0, P.camShake - dt);
-    const v0 = lev.v * (1 + 0.2 * Math.min(1, P.d / lev.len));
+    const v0 = lev.v * (1 + 0.25 * Math.min(1, P.d / lev.len));
     let spd = v0;
     if (P.state === 'run') spd *= 0.5 + 0.5 * sm(0, 1.3, P.hitT);
     else if (P.state === 'win') spd *= Math.max(0, 1 - P.endT / 2.2);
     else spd *= Math.max(0, 1 - P.endT / 0.9);
     P.speedMul = spd / v0; P.vNow = spd;
     P.d += spd * dt;
-    P.x += (LX[P.lane] - P.x) * Math.min(1, dt * 15);
+    /* changement de voie : ressort amorti (départ et arrivée progressifs, pas de saccade) */
+    P.vx += (260 * (LX[P.lane] - P.x) - 32 * P.vx) * dt; P.x = clamp(P.x + P.vx * dt, -LANE - 0.15, LANE + 0.15);
+    P.land = Math.max(0, P.land - dt / 0.3); if (!P.grounded) P.airT += dt;
     const fl = floorAt(P.x, P.d);
     if (P.fly > 0 || (P.fly <= 0 && P.flyPrev)) { /* vol */ }
     if (P.fly > 0) { P.y += (4.6 - P.y) * Math.min(1, dt * 3); P.vy = 0; P.grounded = false; }
     else {
       if (P.grounded) P.coyote = 0.1; else P.coyote -= dt;
       P.jumpBuf = Math.max(0, P.jumpBuf - dt);
-      if (P.jumpBuf > 0 && (P.grounded || P.coyote > 0) && P.state === 'run') { P.vy = 10; P.grounded = false; P.coyote = 0; P.jumpBuf = 0; P.slide = 0; emit('jump'); }
+      if (P.jumpBuf > 0 && (P.grounded || P.coyote > 0) && P.state === 'run') { P.vy = 10; P.grounded = false; P.coyote = 0; P.jumpBuf = 0; P.slide = 0; P.jumped = true; P.airT = 0; emit('jump'); }
       if (!P.grounded || P.y > fl + 0.001 || P.vy > 0) { P.vy -= 26 * dt; P.y += P.vy * dt; }
-      if (P.y <= fl) { if (!P.grounded && P.slidePending) { P.slide = 0.75; P.slidePending = false; emit('slide'); } P.y = fl; P.vy = 0; P.grounded = true; } else P.grounded = false;
+      if (P.y <= fl) { if (!P.grounded) { P.land = P.airT > 0.18 ? 1 : 0; P.jumped = false; P.airT = 0; } if (!P.grounded && P.slidePending) { P.slide = 0.75; P.slidePending = false; emit('slide'); } P.y = fl; P.vy = 0; P.grounded = true; } else P.grounded = false;
     }
     P.flyPrev = P.fly > 0;
     if (P.state === 'run') {
@@ -282,12 +288,12 @@ export function createEngine(canvas, cb = {}) {
     /* poursuivant */
     C.nextVisit -= dt; C.near = Math.max(0, C.near - dt);
     if (C.vphase === 0 && C.nextVisit <= 0 && P.state === 'run') { C.vphase = 1; C.vt = 0; }
-    if (C.vphase > 0) { C.vt += dt; if (C.vphase === 1 && C.vt > 2.4) { C.vphase = 2; C.vt = 0; } else if (C.vphase === 2 && C.vt > 3.8) { C.vphase = 3; C.vt = 0; } else if (C.vphase === 3 && C.vt > 2.4) { C.vphase = 0; C.nextVisit = 18 + Math.random() * 9; } }
+    if (C.vphase > 0) { C.vt += dt; if (C.vphase === 1 && C.vt > 2.4) { C.vphase = 2; C.vt = 0; } else if (C.vphase === 2 && C.vt > 3.8) { C.vphase = 3; C.vt = 0; } else if (C.vphase === 3 && C.vt > 2.4) { C.vphase = 0; C.nextVisit = 9 + Math.random() * 6; } }
     let tg = 14; if (C.vphase === 1 || C.vphase === 2) tg = 4.4; if (C.near > 0) tg = 3.0; if (P.state === 'lose') tg = 0.9; if (P.state === 'win') tg = 14;
     C.gap += (tg - C.gap) * Math.min(1, dt * 2.2);
     let cxT = P.x - 1.15; if (P.x < -2) cxT = P.x + 1.15; C.x += (cxT - C.x) * Math.min(1, dt * 4);
-    P.phi += dt * (spd > 0.5 ? 1.35 * spd + 2 : 0);
-    C.phi += dt * (1.35 * Math.max(spd, 6) * (S.chaserType === 'chien' ? 1.25 : 1) + 2);
+    P.phi += dt * (spd > 0.5 ? CADENCE : 0);
+    C.phi += dt * CADENCE * (S.chaserType === 'chien' ? 1.2 : 1);
     spawnLive(); S.scen.update(-P.d, dt, cam, S.t);
     hudT.t -= dt; if (hudT.t <= 0) { hudT.t = 0.1; sendHud(); }
   }
@@ -318,11 +324,11 @@ export function createEngine(canvas, cb = {}) {
     if (confetti) { const a = confetti.geometry.attributes.position; for (let i = 0; i < a.count; i++) { let y = a.getY(i) - 0.05 * (1 + (i % 4) * 0.2); if (y < 0) y = 11; a.setY(i, y); a.setX(i, a.getX(i) + Math.sin(S.t * 2 + i) * 0.01); } a.needsUpdate = true; }
   }
   function posePlay(dt) {
-    const sliding = P.slide > 0 ? 1 : 0;
+    P.sk += ((P.slide > 0 ? 1 : 0) - P.sk) * Math.min(1, dt * (P.slide > 0 ? 16 : 9)); const sliding = P.sk;
     const jumpK = P.fly > 0 ? 0 : clamp((P.y - (P.grounded ? P.y : 0)) > 0 || !P.grounded ? 1 : 0, 0, 1);
-    runner.position.set(P.x, P.y, -P.d); runner.rotation.set(0, -(LX[P.lane] - P.x) * 0.07, -(LX[P.lane] - P.x) * 0.05);
+    runner.position.set(P.x, P.y, -P.d); runner.rotation.set(0, -clamp(P.vx * 0.03, -0.5, 0.5), -clamp(P.vx * 0.022, -0.35, 0.35));
     P.jk = (P.jk || 0) + ((!P.grounded && P.fly <= 0 ? 1 : 0) - (P.jk || 0)) * Math.min(1, dt * 14); const air = P.jk;
-    poseRunner(runner, { phi: P.phi, jump: air, slide: sliding, t: S.t, speed: clamp(P.speedMul, 0.3, 1), stumble: P.hitT < 0.8 && P.state === 'run' ? 1 - P.hitT / 0.8 : 0, fly: P.fly > 0 ? 1 : 0, win: P.state === 'win' && P.endT > 0.8 ? 1 : 0, tired: P.state === 'lose' ? clamp(P.endT * 2, 0, 1) : 0 });
+    poseRunner(runner, { phi: P.phi, jump: air, ap: P.jumped ? clamp(P.airT / 0.77, 0, 1) : 0.8, land: P.land, side: clamp(P.vx / 14, -1, 1), slide: sliding, t: S.t, speed: clamp(P.speedMul, 0.3, 1), stumble: P.hitT < 0.8 && P.state === 'run' ? 1 - P.hitT / 0.8 : 0, fly: P.fly > 0 ? 1 : 0, win: P.state === 'win' && P.endT > 0.8 ? 1 : 0, tired: P.state === 'lose' ? clamp(P.endT * 2, 0, 1) : 0 });
     runner.visible = P.inv > 0 && P.state === 'run' && P.fly <= 0 ? Math.floor(S.t * 14) % 2 === 0 : true;
     shieldMesh.visible = P.shield > 0; shieldMesh.position.set(P.x, P.y + 0.95, -P.d); shieldMesh.scale.setScalar(1 + Math.sin(S.t * 6) * 0.03);
     chaser.visible = C.gap < 9; chaser.position.set(C.x, 0, -P.d + C.gap); chaser.rotation.set(0, 0, 0);

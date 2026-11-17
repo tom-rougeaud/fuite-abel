@@ -222,14 +222,32 @@ function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Ma
 
 const clamp01 = x => Math.max(0, Math.min(1, x));
 /* st : {phi, jump, slide, stumble, fly, win, tired, t, speed} */
+/* clés d’animation du saut : impulsion (jambe d’appel levée, bras opposé en avant), groupé à l’apogée,
+   réception jambes tendues vers l’avant avec balancier des bras. ap = avancement dans le saut (0 à 1). */
+const JK = [
+  [0, { hipL: -0.55, kneeL: -0.3, ankleL: -0.9, hipR: 1.45, kneeR: -1.55, ankleR: 0.1, shL: 1.25, shR: -0.95, elL: 0.9, elR: 0.7, sp: -0.3, py: 0.0, pr: 0 }],
+  [0.28, { hipL: -0.1, kneeL: -1.05, ankleL: -0.4, hipR: 1.15, kneeR: -1.75, ankleR: 0.2, shL: 1.55, shR: 0.1, elL: 0.8, elR: 0.9, sp: -0.32, py: 0.08, pr: 0 }],
+  [0.55, { hipL: 0.95, kneeL: -1.65, ankleL: 0.15, hipR: 0.9, kneeR: -1.6, ankleR: 0.15, shL: 1.75, shR: 1.6, elL: 0.55, elR: 0.6, sp: -0.22, py: 0.1, pr: 0 }],
+  [0.8, { hipL: 0.55, kneeL: -0.65, ankleL: 0.3, hipR: 1.0, kneeR: -0.35, ankleR: 0.2, shL: 0.1, shR: 0.95, elL: 0.5, elR: 0.5, sp: -0.26, py: 0.04, pr: 0 }],
+  [1, { hipL: 0.75, kneeL: -0.3, ankleL: 0.3, hipR: 1.05, kneeR: -0.2, ankleR: 0.25, shL: -0.4, shR: 0.7, elL: 0.6, elR: 0.6, sp: -0.32, py: 0.0, pr: 0 }]
+];
+const sstep = u => { u = Math.max(0, Math.min(1, u)); return u * u * (3 - 2 * u); };
+function kfv(ap, K) {
+  let a = K[0], b = K[K.length - 1];
+  for (let i = 0; i < K.length - 1; i++) if (ap >= K[i][0] && ap <= K[i + 1][0]) { a = K[i]; b = K[i + 1]; break; }
+  const e = b[0] === a[0] ? 0 : sstep((ap - a[0]) / (b[0] - a[0])), o = {};
+  for (const k in a[1]) o[k] = a[1][k] + (b[1][k] - a[1][k]) * e;
+  return o;
+}
 export function poseRunner(R, st) {
   const B = R.userData.B, phi = st.phi || 0, jump = st.jump || 0, slide = st.slide || 0, t = st.t || 0;
   const stumble = st.stumble || 0, fly = st.fly || 0, win = st.win || 0, tired = st.tired || 0;
   const s0 = Math.sin(phi), s1 = Math.sin(phi + Math.PI), c0 = Math.cos(phi), c1 = Math.cos(phi + Math.PI);
   const leg = (s, c) => ({ hip: 0.12 + 0.82 * s, knee: -(0.32 + 1.15 * Math.pow(Math.max(0, c), 1.3)), ankle: -0.26 + 0.5 * s });
   const lL = leg(s0, c0), lR = leg(s1, c1);
-  const jp = { hipL: 1.2, kneeL: -1.3, ankleL: 0.15, hipR: -0.3, kneeR: -0.55, ankleR: -0.7, shL: 1.45, shR: -0.8, elL: 0.75, elR: 1.15 };
-  const sl = { hipL: 0.32, kneeL: -0.08, ankleL: 0.35, hipR: 0.18, kneeR: -0.25, ankleR: 0.35, shL: -1.5, shR: -1.3, elL: 0.3, elR: 0.3 };
+  const jp = kfv(st.ap === undefined ? 0.55 : st.ap, JK), land = st.land || 0, side = st.side || 0;
+  /* tacle : une jambe tendue devant, l’autre repliée dessous, bras en arrière pour s’appuyer */
+  const sl = { hipL: 0.3, kneeL: -0.05, ankleL: 0.45, hipR: -0.35, kneeR: -1.85, ankleR: 0.5, shL: -1.6, shR: -1.1, elL: 0.25, elR: 0.35 };
   const mx = (r, j, c) => L(L(r, j, jump), c, slide);
   const S = (J, v) => { J.rotation.x = v; };
   S(B.hipL, mx(lL.hip, jp.hipL, sl.hipL)); S(B.kneeL, mx(lL.knee, jp.kneeL, sl.kneeL)); S(B.ankleL, mx(lL.ankle, jp.ankleL, sl.ankleL));
@@ -238,14 +256,33 @@ export function poseRunner(R, st) {
   S(B.elL, mx(1.32 - 0.38 * s0, jp.elL, sl.elL)); S(B.elR, mx(1.32 - 0.38 * s1, jp.elR, sl.elR));
   B.shL.rotation.z = 0.12; B.shR.rotation.z = -0.12;
   const run = 1 - jump * 0.8 - slide;
-  B.spine.rotation.x = L(-0.2, -0.16, jump) + slide * -0.55;
+  B.spine.rotation.x = L(-0.2, jp.sp, jump) + slide * -0.55;
   B.chest.rotation.y = -0.2 * s0 * Math.max(0, run); B.pelvis.rotation.y = 0.13 * s0 * Math.max(0, run);
   B.pelvis.rotation.z = 0.045 * s0 * Math.max(0, 1 - jump - slide); B.chest.rotation.z = -0.03 * s0;
   B.head.rotation.y = 0.12 * s0; B.head.rotation.x = 0.12 - slide * 0.3; B.neck.rotation.x = 0.08;
   B.pelvis.rotation.x = slide * 1.15;
-  B.pelvis.position.y = 0.96 + (-0.045 * Math.cos(2 * phi) * (1 - jump) - 0.035) * (1 - slide) - slide * 0.5 + jump * 0.02;
+  B.pelvis.position.y = 0.96 + (-0.045 * Math.cos(2 * phi) * (1 - jump) - 0.035) * (1 - slide) - slide * 0.6 + jump * jp.py;
   B.pelvis.position.x = 0.022 * s0 * (1 - jump) * (1 - slide);
   B.pelvis.position.z = slide * 0.15;
+  /* réception : on amortit en pliant les genoux, buste en avant */
+  if (land > 0.01 && jump < 0.5 && slide < 0.5) {
+    const k = sstep(land) * (1 - jump);
+    for (const J of ['hipL', 'hipR']) B[J].rotation.x = L(B[J].rotation.x, 1.0, k);
+    for (const J of ['kneeL', 'kneeR']) B[J].rotation.x = L(B[J].rotation.x, -1.55, k);
+    for (const J of ['ankleL', 'ankleR']) B[J].rotation.x = L(B[J].rotation.x, 0.25, k);
+    B.shL.rotation.x = L(B.shL.rotation.x, 0.7, k); B.shR.rotation.x = L(B.shR.rotation.x, 0.5, k);
+    B.elL.rotation.x = L(B.elL.rotation.x, 1.1, k); B.elR.rotation.x = L(B.elR.rotation.x, 1.1, k);
+    B.spine.rotation.x = L(B.spine.rotation.x, -0.5, k); B.head.rotation.x = L(B.head.rotation.x, 0.3, k);
+    B.pelvis.position.y -= 0.26 * k;
+  }
+  /* changement de voie : pas chassé, jambe côté virage qui s’écarte, bras qui équilibrent, buste incliné */
+  if (Math.abs(side) > 0.02) {
+    const a = Math.abs(side) * (1 - jump * 0.5) * (1 - slide), sd = Math.sign(side);
+    B.hipR.rotation.z = (sd > 0 ? 0.42 : -0.1) * a; B.hipL.rotation.z = (sd < 0 ? -0.42 : 0.1) * a;
+    B.shL.rotation.z += (-sd * 0.5 + 0.25) * a; B.shR.rotation.z += (-sd * 0.5 - 0.25) * a;
+    B.pelvis.rotation.z += -sd * 0.12 * a; B.chest.rotation.z += -sd * 0.16 * a; B.head.rotation.z = sd * 0.14 * a;
+    B.pelvis.rotation.y += -sd * 0.18 * a;
+  } else { B.hipR.rotation.z = 0; B.hipL.rotation.z = 0; B.head.rotation.z = 0; }
   /* trébuche : buste en avant, bras qui battent */
   if (stumble > 0) {
     const k = stumble, w = Math.sin(t * 26);
