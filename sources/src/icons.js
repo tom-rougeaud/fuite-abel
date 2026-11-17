@@ -4,6 +4,12 @@ import * as THREE from 'three';
    Les couleurs « currentColor » suivent la couleur du texte du parent. */
 const S = 'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"';
 const F = 'fill="currentColor"';
+/* roue crantée : 8 dents, tracée par le code */
+function gearPath() {
+  const n = 8, R = 10, r = 7.6, w = Math.PI / n, pts = [];
+  for (let i = 0; i < n; i++) { const a = i / n * 2 * Math.PI; [[r, a - w * 0.5], [R, a - w * 0.3], [R, a + w * 0.3], [r, a + w * 0.5]].forEach(q => pts.push(q)); }
+  return 'M' + pts.map(([rr, a]) => (12 + rr * Math.cos(a)).toFixed(2) + ' ' + (12 + rr * Math.sin(a)).toFixed(2)).join('L') + 'Z';
+}
 const I = {
   heart: `<path ${F} d="M12 21s-8-5.2-8-11a4.6 4.6 0 0 1 8-3 4.6 4.6 0 0 1 8 3c0 5.8-8 11-8 11z"/>`,
   heartO: `<path ${S} d="M12 21s-8-5.2-8-11a4.6 4.6 0 0 1 8-3 4.6 4.6 0 0 1 8 3c0 5.8-8 11-8 11z"/>`,
@@ -19,7 +25,11 @@ const I = {
   close: `<path ${S} stroke-width="2.6" d="M6 6l12 12M18 6L6 18"/>`,
   bag: `<path ${S} d="M5 8h14l-1 12H6z"/><path ${S} d="M9 8V6.5a3 3 0 0 1 6 0V8"/>`,
   map: `<path ${S} d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path ${S} d="M9 4v14M15 6v14"/>`,
-  gear: `<circle ${S} cx="12" cy="12" r="3.2"/><path ${S} d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.5 5.5l1.8 1.8M16.7 16.7l1.8 1.8M18.5 5.5l-1.8 1.8M7.3 16.7l-1.8 1.8"/>`,
+  gear: `<path ${F} fill-rule="evenodd" d="${gearPath()} M15.2 12a3.2 3.2 0 1 0-6.4 0 3.2 3.2 0 1 0 6.4 0z"/>`,
+  moon: `<path ${F} d="M20 14.6A8.4 8.4 0 0 1 9.4 4a8.4 8.4 0 1 0 10.6 10.6z"/>`,
+  sunset: `<path ${S} d="M3.5 18.5h17M7 18.5a5 5 0 0 1 10 0"/><path ${S} d="M12 6.5v3M5.3 9.8l2 2M18.7 9.8l-2 2M2.8 14.5h2.2M19 14.5h2.2"/>`,
+  keyboard: `<rect ${S} x="2.5" y="6.5" width="19" height="11" rx="2.2"/><path ${S} stroke-width="2.4" d="M6.5 10.5h.1M10 10.5h.1M13.5 10.5h.1M17 10.5h.1M7.5 14h9"/>`,
+  refresh: `<path ${S} d="M19.5 12a7.5 7.5 0 1 1-2.4-5.5"/><path ${S} d="M19.5 4.5v4.5H15"/>`,
   speaker: `<path ${F} d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path ${S} d="M15.5 9a4.2 4.2 0 0 1 0 6M18 6.5a8 8 0 0 1 0 11"/>`,
   speakerOff: `<path ${F} d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path ${S} d="M16 9.5l5 5M21 9.5l-5 5"/>`,
   lock: `<rect ${F} x="5" y="10.5" width="14" height="10" rx="2.4"/><path ${S} d="M8.2 10.5V8a3.8 3.8 0 0 1 7.6 0v2.5"/>`,

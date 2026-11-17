@@ -6,3 +6,5 @@ html=open('template.html').read(); data=open('contenu.json').read()
 assert '</' not in data
 html=html.replace('/*JSON*/',data).replace('/*BUNDLE*/',js)
 open('../index.html','w').write(html); print('index.html',len(html)//1024,'Ko')
+
+v=json.loads(data)['version']; open('../version.json','w').write(json.dumps({'version':v})); print('version',v)

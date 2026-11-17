@@ -7,10 +7,8 @@ import { badgeTexture } from './icons.js';
 
 export const LANE = 3.2, LX = [-LANE, 0, LANE];
 export const SPEEDS = [8, 10.5, 13];
-export const LEVELS = [
-  { theme: 0, len: 500, diff: 0.25, seed: 11 }, { theme: 1, len: 600, diff: 0.4, seed: 22 }, { theme: 2, len: 700, diff: 0.55, seed: 33 },
-  { theme: 3, len: 800, diff: 0.7, seed: 44 }, { theme: 4, len: 900, diff: 0.85, seed: 55 }
-];
+/* 15 niveaux : 5 décors × (jour, soir, nuit). Plus on avance, plus c’est long, rapide et chargé. */
+export const LEVELS = Array.from({ length: 15 }, (_, i) => ({ theme: (i % 5) + 5 * Math.floor(i / 5), len: 800 + 100 * i, diff: 0.3 + 0.05 * i, vmul: 1 + 0.01 * i, seed: 11 * (i + 1) }));
 export const POWERS = { aimant: { icon: 'magnet', bg: '#c0392b', dur: 9 }, bouclier: { icon: 'shield', bg: '#2f7fd0', dur: 14 }, envol: { icon: 'balloon', bg: '#d9578a', dur: 5.5 }, x2: { icon: 'x2', bg: '#7a4fb8', dur: 10 }, coeur: { icon: 'heart', bg: '#d1344a', dur: 0 } };
 const SIZE = { sedan: [4.8, 1.9, 1.7], pickup: [5.6, 2.05, 2.1], van: [5.2, 2.1, 2.45], truck: [17.6, 2.55, 4.0], bus: [11.5, 2.5, 3.0], busramp: [18.5, 2.5, 3.0], barrier: [0.7, 2.6, 0.9], beam: [0.6, 3.3, 2.0] };
 const RAMP = 7;
@@ -21,7 +19,7 @@ const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 
 /* ---------- génération d’un niveau (déterministe) ---------- */
 export function genLevel(li, si) {
-  const L = LEVELS[li], v = SPEEDS[si], r = mb(L.seed * 100 + si), obs = [], coins = [], picks = [];
+  const L = LEVELS[li], v = SPEEDS[si] * L.vmul, r = mb(L.seed * 100 + si), obs = [], coins = [], picks = [];
   const addObs = (kind, lane, d0, extra = {}) => {
     const [len, w, top] = SIZE[kind], type = kind === 'barrier' ? 'barrier' : kind === 'beam' ? 'beam' : kind === 'busramp' ? 'ramp' : 'block';
     obs.push(Object.assign({ kind, lane, x: LX[lane], d0, d1: d0 + len, len, hw: w / 2, top, type, variant: (r() * 6) | 0 }, extra));
@@ -30,15 +28,16 @@ export function genLevel(li, si) {
   const coin = (d, x, y) => coins.push({ d, x, y, got: false });
   // tutoriel : ligne de pièces au centre, aucun obstacle
   for (let d = 10; d <= 46; d += 3) coin(d, 0, 1.0);
-  let d = 54, safe = 1, prevEnd = 46, rows = 0, lastPick = 0, prevSafe = 1;
+  let d = 54, safe = 1, prevEnd = 46, rows = 0, lastPick = 0, prevSafe = 1, combo = false, lastCombo = false;
   while (d < L.len - 40) {
-    const diff = L.diff * (0.55 + 0.45 * Math.min(1, rows / 8));
+    const diff = Math.min(1.1, L.diff * (0.55 + 0.45 * Math.min(1, rows / 8)) + 0.25 * Math.min(1, d / L.len));
     let kind;
     const q = r();
     if (rows === 0) kind = 'barrier'; else if (rows === 1) kind = 'beam';
-    else if (q < 0.16) kind = 'free'; else if (q < 0.42) kind = 'barrier'; else if (q < 0.62) kind = 'beam'; else kind = rows >= 3 ? 'busramp' : 'barrier';
+    else if (q < 0.16 - 0.1 * diff) kind = 'free'; else if (q < 0.42) kind = 'barrier'; else if (q < 0.62) kind = 'beam'; else kind = rows >= 3 ? 'busramp' : 'barrier';
+    if (combo) kind = r() < 0.5 ? 'barrier' : 'beam';
     const opts = [safe - 1, safe + 1].filter(l => l >= 0 && l <= 2);
-    const newSafe = rows < 2 ? 1 : (r() < 0.5 ? opts[(r() * opts.length) | 0] : safe);
+    const newSafe = rows < 2 ? 1 : (combo ? safe : r() < 0.5 ? opts[(r() * opts.length) | 0] : safe);
     // pièces de la zone de dégagement : le chemin glisse vers la nouvelle voie
     const g0 = prevEnd + 2, g1 = d - 3;
     for (let dd = g0; dd <= g1; dd += 3) { const u = g1 > g0 ? (dd - g0) / (g1 - g0) : 1; coin(dd, LX[prevSafe] + (LX[newSafe] - LX[prevSafe]) * sm(0.15, 0.85, u), 1.0); }
@@ -68,7 +67,9 @@ export function genLevel(li, si) {
       if (type === 'envol') for (let k = 0; k < 12; k++) coin(pd + 12 + k * 2.6, LX[newSafe], 5.0);
       lastPick = d;
     }
-    d = prevEnd + Math.max(13, v * 1.45 + r() * 6);
+    /* série : un second obstacle suit de près sur la même voie (saute, puis glisse) */
+    lastCombo = combo; combo = rows > 4 && !lastCombo && (kind === 'barrier' || kind === 'beam') && r() < 0.1 + 0.32 * diff;
+    d = prevEnd + (combo ? v * 1.0 + 4 : Math.max(11.5, v * (1.5 - 0.3 * diff) + r() * 5));
   }
   // fin de parcours : dernière ligne de pièces vers l’arche
   const g0 = prevEnd + 2; for (let dd = g0; dd < L.len - 4; dd += 3) { const u = (dd - g0) / Math.max(1, L.len - 4 - g0); coin(dd, LX[safe] + (0 - LX[safe]) * sm(0.1, 0.5, u), 1.0); }
@@ -218,9 +219,19 @@ export function createEngine(canvas, cb = {}) {
     if (ptr && !ptr.done && performance.now() - ptr.t < 320) { const fx = e.clientX / canvas.clientWidth; input(fx < 0.33 ? 'left' : fx > 0.67 ? 'right' : 'jump'); }
     ptr = null;
   });
+  /* clavier : les flèches marchent toujours ; ZQSD / WASD seulement si le clavier n’a pas de flèches
+     (réglage « lettres », ou choix automatique si la première touche utilisée est une lettre) */
+  let keysMode = 'fleches', arrowSeen = false;
+  const ARROWS = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'jump', ArrowDown: 'slide' }, LETTERS = { q: 'left', a: 'left', d: 'right', z: 'jump', w: 'jump', s: 'slide' };
   addEventListener('keydown', e => {
-    const k = e.key; if (k === 'ArrowLeft' || k === 'a' || k === 'q') input('left'); else if (k === 'ArrowRight' || k === 'd') input('right'); else if (k === 'ArrowUp' || k === 'w' || k === 'z' || k === ' ') input('jump'); else if (k === 'ArrowDown' || k === 's') input('slide');
+    const k = e.key;
+    if (ARROWS[k]) { arrowSeen = true; if (S.mode === 'play') e.preventDefault(); input(ARROWS[k]); return; }
+    if (k === ' ') { if (S.mode === 'play') e.preventDefault(); input('jump'); return; }
+    const a = LETTERS[(k || '').toLowerCase()]; if (!a || e.ctrlKey || e.metaKey || e.altKey || S.mode !== 'play') return;
+    if (keysMode !== 'lettres') { if (arrowSeen) return; keysMode = 'lettres'; if (cb.onKeys) cb.onKeys('lettres'); }
+    input(a);
   });
+  function setKeys(m) { keysMode = m === 'lettres' ? 'lettres' : 'fleches'; }
 
   /* ---------- mise à jour ---------- */
   const dummy = new THREE.Object3D();
@@ -344,7 +355,7 @@ export function createEngine(canvas, cb = {}) {
     sub.position.set(0, 0, z); sub.rotation.set(0, shop.yawNow + sway, 0); platform.position.set(0, -0.06, z);
     if (sub.userData.kind === 'dog') poseDog(sub, { phi: S.t * 3, t: S.t }); else poseRunner(sub, { phi: S.t * 4, idle: 1, t: S.t, speed: 0.4 });
     const asp = S.w / S.h, f = shop.focus, k = asp < 0.7 ? 1.25 : 1;
-    const V = { body: [1.2, 4.1 * k, 0.6], head: [1.72, 2.2 * k, 1.36], feet: [0.5, 2.1 * k, 0.12], back: [1.2, 4.1 * k, 0.6], chaser: [0.95, 3.8 * k, 0.42] }[sub === chaser ? 'chaser' : f] || [1.2, 4.1, 0.6];
+    const V = { body: [1.2, 4.1 * k, 0.6], head: [1.72, 2.2 * k, 1.36], feet: [0.5, 2.1 * k, 0.12], back: [1.2, 4.1 * k, 0.6], chaser: [0.95, 3.8 * k, 0.42], level: [1.9, 6.6 * k, 1.0] }[sub === chaser ? 'chaser' : f] || [1.2, 4.1, 0.6];
     cam.position.set(0, V[0], z - V[1]); cam.lookAt(0, V[2], z); cam.fov = 40; cam.updateProjectionMatrix();
     S.scen.update(z, dt, cam, S.t, true);
     sun.position.set(-5, 8, z - 6); sun.target.position.set(0, 0, z); sun.target.updateMatrixWorld();
@@ -364,7 +375,7 @@ export function createEngine(canvas, cb = {}) {
   raf = requestAnimationFrame(frame);
   function pause(b) { S.paused = b; }
   return {
-    setLook, setChaser, menu, shopMode, shopView, startLevel, input, resize, setQuality, pause, renderer, scene, cam,
+    setLook, setChaser, setKeys, menu, shopMode, shopView, startLevel, input, resize, setQuality, pause, renderer, scene, cam,
     stop() { running = false; }, go() { running = true; last = performance.now(); },
     _s: () => ({ S, P, C, lev, live }), _step: dt => stepPlay(dt), POWERS
   };

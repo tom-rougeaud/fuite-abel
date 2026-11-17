@@ -16,6 +16,20 @@ export const THEMES = [
     road: { base: '#5c5648', line: '#cfc7a8', edge: '#cfc7a8', alpha: 0.55 }, walk: '#6e7b4a', curb: '#8a7a5a', ground: '#4f7a3f', gkind: 'grass', haze: '#aac7a2' }
 ];
 
+/* ---------- variantes : soir (couchant) et nuit — mêmes décors, autres lumières ---------- */
+const BASE_N = THEMES.length;
+const DUSK = { sky: ['#2f2f66', '#7a4f80', '#e07a58', '#f2a86a', '#efbf7c'], fog: ['#e3a07c', 40, 175], hemi: ['#f0c3b4', '#4a3c4a', 0.95], sun: ['#ff9a55', 2.4, [-14, 10, 10]], exposure: 1.0, env: 0.4, lit: 0.6, label: 'soir' };
+const NIGHT = { sky: ['#040816', '#0a1632', '#14264a', '#1f3359', '#283d66'], fog: ['#16223f', 28, 135], hemi: ['#7f95d0', '#20263a', 0.95], sun: ['#b9c8f5', 1.25, [-9, 16, 8]], exposure: 1.1, env: 0.28, lit: 0.9, stars: true, label: 'nuit' };
+[DUSK, NIGHT].forEach(v => {
+  for (let i = 0; i < BASE_N; i++) {
+    const b = THEMES[i], road = Object.assign({}, b.road), t = Object.assign({}, b, { sky: v.sky, fog: v.fog, hemi: v.hemi, sun: v.sun, exposure: v.exposure, env: v.env, lit: v.lit, stars: !!v.stars, variant: v.label, road });
+    if (v.stars) { t.ground = shadeHex(b.ground, 0.55); t.walk = shadeHex(b.walk, 0.6); t.curb = shadeHex(b.curb, 0.65); }
+    else { t.ground = shadeHex(b.ground, 0.85); t.walk = shadeHex(b.walk, 0.88); }
+    THEMES.push(t);
+  }
+});
+function shadeHex(c, k) { return '#' + new THREE.Color(c).multiplyScalar(k).getHexString(); }
+
 /* ---------- textures ---------- */
 function cv(w, h = w) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
 function rng(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
@@ -31,6 +45,13 @@ function roadTex(th) {
   const r = rng(5), c = cv(512), g = c.getContext('2d'), R = th.road;
   g.fillStyle = R.base; g.fillRect(0, 0, 512, 512);
   for (let i = 0; i < 16000; i++) { const v = r() < 0.5 ? 1.12 : 0.86; g.fillStyle = shade(R.base, v); g.globalAlpha = 0.25; g.fillRect(r() * 512, r() * 512, 1.6, 1.6); }
+  /* traces de pneus, rustines et fissures : la route paraît usée */
+  g.fillStyle = shade(R.base, 0.8); g.globalAlpha = 0.22;
+  for (const cx of [256 - 170.6, 256, 256 + 170.6]) for (const dx of [-26, 26]) g.fillRect(cx + dx - 9, 0, 18, 512);
+  g.globalAlpha = 0.5;
+  for (let i = 0; i < 7; i++) { g.fillStyle = shade(R.base, 0.88 + r() * 0.1); g.fillRect(40 + r() * 400, r() * 500, 20 + r() * 50, 12 + r() * 30); }
+  g.strokeStyle = shade(R.base, 0.6); g.lineWidth = 1.4;
+  for (let i = 0; i < 8; i++) { let x = 30 + r() * 450, y = r() * 512; g.beginPath(); g.moveTo(x, y); for (let k = 0; k < 5; k++) { x += (r() - 0.5) * 22; y += 8 + r() * 14; g.lineTo(x, y); } g.stroke(); }
   g.globalAlpha = R.alpha; g.fillStyle = R.line;
   for (const x of [256 - 85.3, 256 + 85.3]) for (let y = 0; y < 512; y += 256) g.fillRect(x - 3, y + 20, 6, 128);
   g.fillStyle = R.edge; g.fillRect(256 - 240 - 3, 0, 6, 512); g.fillRect(256 + 240 - 3, 0, 6, 512);
@@ -54,14 +75,14 @@ function seaTex() {
   for (let i = 0; i < 180; i++) { g.strokeStyle = r() < 0.5 ? '#6cc3e6' : '#2276ad'; g.globalAlpha = 0.4; g.lineWidth = 1.6; const x = r() * 256, y = r() * 256; g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + 10, y - 3, x + 22, y); g.stroke(); }
   g.globalAlpha = 1; return c;
 }
-const FAC = {};
+const FAC = {}, CUR = { lit: 0.38 };
 function facadeMat(color, lit = '#f0cf8d', dark = '#33405a') {
-  const k = color + lit; if (FAC[k]) return FAC[k];
+  const k = color + lit + CUR.lit; if (FAC[k]) return FAC[k];
   const r = rng(color.charCodeAt(2) * 31), c = cv(256, 512), g = c.getContext('2d');
   g.fillStyle = color; g.fillRect(0, 0, 256, 512);
   for (let i = 0; i < 2500; i++) { g.fillStyle = `rgba(0,0,0,${r() * 0.08})`; g.fillRect(r() * 256, r() * 512, 2, 2); }
   for (let y = 20; y < 500; y += 46) for (let x = 18; x < 240; x += 40) {
-    const on = r() < 0.38; g.fillStyle = on ? (r() < 0.5 ? lit : shade(lit, 0.92)) : dark; g.fillRect(x, y, 24, 30);
+    const on = r() < CUR.lit; g.fillStyle = on ? (r() < 0.5 ? lit : shade(lit, 0.92)) : dark; g.fillRect(x, y, 24, 30);
     g.fillStyle = 'rgba(255,255,255,0.14)'; g.fillRect(x, y, 24, 3); g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(x, y + 28, 24, 3);
     g.fillStyle = 'rgba(0,0,0,0.18)'; g.fillRect(x - 3, y + 31, 30, 3);
   }
@@ -208,6 +229,19 @@ const GEN = {
   }
 };
 
+/* ---------- détails communs à tous les décors : balises, panneaux, touffes, cailloux ---------- */
+function common(B, r, z0, side, th) {
+  const night = !!th.stars, post = M('#e8e6dc', 0.7), red = night ? EM('#ff4b3a', '#ff2a1a', 1.4) : M('#c8412f', 0.7);
+  for (let z = z0 - 3; z > z0 - CH; z -= 12) { B.box(post, side * 4.98, 0, z, 0.1, 0.8, 0.1); B.box(red, side * 4.98, 0.5, z, 0.11, 0.12, 0.11); }
+  if (r() < 0.6) {
+    const z = z0 - R2(r, 6, 44), x = side * 5.6, pm = M('#585d66', 0.6), sg = M(pick(r, ['#f2c14e', '#3f8fd8', '#e24a4a', '#4fae6a']), 0.6);
+    B.cyl(pm, x, 0, z, 0.05, 2.3); B.put(G.box, sg, x, 2.55, z, 0.9, 0.9, 0.06, 0, side * 1.1, Math.PI / 4);
+  }
+  const tuft = M(shadeHex(th.ground, 1.12), 1);
+  for (let k = 0; k < 5; k++) { const x = side * R2(r, 5.2, 6.4), z = z0 - R2(r, 0, 50); B.cone(tuft, x, 0.1, z, 0.12, 0.45); B.cone(tuft, x + 0.12, 0.1, z + 0.05, 0.1, 0.35); }
+  for (let k = 0; k < 4; k++) B.ico(M(shadeHex(th.curb, 0.85), 1), side * R2(r, 5.2, 9.5), 0.1, z0 - R2(r, 0, 50), R2(r, 0.1, 0.22), 0.1, R2(r, 0.1, 0.22), r() * 3);
+}
+
 /* ---------- fonds lointains (suivent le joueur) ---------- */
 function backdrop(th, idx) {
   const g = new THREE.Group(), r = rng(idx + 40), B = new Bucket(), hz = (c) => new THREE.MeshBasicMaterial({ color: c, fog: false });
@@ -225,7 +259,20 @@ function backdrop(th, idx) {
   } else {
     for (let i = 0; i < 10; i++) B.sph(hz(pick(r, ['#7da88a', '#6f9a7c', '#88b094'])), (i - 5) * 70 + r() * 20, -8, far - r() * 50, R2(r, 60, 90), R2(r, 25, 45), 50);
   }
-  g.add(B.finish()); return g;
+  g.add(B.finish());
+  /* nuages (jour et soir) */
+  if (!th.stars) {
+    const cb = new Bucket(), cm = new THREE.MeshBasicMaterial({ color: th.variant === 'soir' ? '#f4c9b0' : '#ffffff', fog: false, transparent: true, opacity: 0.85 });
+    for (let i = 0; i < 9; i++) { const x = (i - 4) * 70 + r() * 30, y = R2(r, 70, 130), z = far - 30 - r() * 60, sc = R2(r, 14, 26); for (let k = 0; k < 4; k++) cb.sph(cm, x + (k - 1.5) * sc * 0.7, y + (k % 2) * sc * 0.18, z, sc * 0.55, sc * 0.3, sc * 0.4); }
+    const cg = cb.finish(); g.add(cg); g.userData.clouds = cg;
+  } else {
+    const n = 260, p = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { const a = r() * Math.PI * 2, e = 0.25 + r() * 1.1, R = 330; p[i * 3] = Math.cos(a) * Math.cos(e) * R * 0.9; p[i * 3 + 1] = Math.sin(e) * R * 0.45 + 15; p[i * 3 + 2] = -Math.abs(Math.sin(a)) * Math.cos(e) * R - 40; }
+    const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.BufferAttribute(p, 3));
+    const st = new THREE.Points(sg, new THREE.PointsMaterial({ color: '#ffffff', size: 1.6, sizeAttenuation: false, fog: false, depthWrite: false })); st.frustumCulled = false; g.add(st);
+    const moon = new THREE.Mesh(new THREE.SphereGeometry(9, 20, 14), new THREE.MeshBasicMaterial({ color: '#f4f1de', fog: false })); moon.position.set(-90, 120, far - 80); g.add(moon);
+  }
+  return g;
 }
 
 /* ---------- gestionnaire de décor ---------- */
@@ -266,7 +313,8 @@ export class Scenery {
   }
   build(i) {
     const r = rng(this.idx * 7919 + i * 131 + 17), B = new Bucket(), z0 = -i * CH, gen = GEN[this.th.id];
-    gen(B, r, z0, -1); gen(B, r, z0, 1);
+    CUR.lit = this.th.lit || 0.38;
+    gen(B, r, z0, -1); gen(B, r, z0, 1); common(B, r, z0, -1, this.th); common(B, r, z0, 1, this.th);
     if (this.th.id === 'ville' && r() < 0.35) { const z = z0 - R2(r, 10, 40); for (let k = -4; k <= 4; k++) B.box(mat('#e6e2d6', 0.9), k * 1.0, 0.012, z, 0.55, 0.01, 3.2); }
     const grp = B.finish(); this.root.add(grp); this.chunks.set(i, grp);
   }
@@ -275,6 +323,7 @@ export class Scenery {
     this.road.position.z = cz; this.static.children.forEach(m => { if (m !== this.sea) m.position.z = cz; });
     if (this.sea) this.sea.position.z = cz;
     this.back.position.z = back ? pz + 600 : pz;
+    if (this.back.userData.clouds) this.back.userData.clouds.position.x = Math.sin(t * 0.02) * 40;
     const ci = Math.floor(-pz / CH);
     for (let i = Math.max(0, ci - (back ? 4 : 1)); i <= ci + 5; i++) if (!this.chunks.has(i)) this.build(i);
     this.chunks.forEach((g, i) => { if (i < ci - (back ? 5 : 2)) { g.traverse(o => { if (o.geometry) o.geometry.dispose(); }); this.root.remove(g); this.chunks.delete(i); } });

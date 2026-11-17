@@ -10,11 +10,18 @@ function sSet(k, v) { try { localStorage.setItem(KEY + k, v); } catch (e) { mem[
 function sDel(k) { try { localStorage.removeItem(KEY + k); } catch (e) { delete mem[k]; } }
 
 /* ---------- sauvegarde ---------- */
-function defSave() { return { v: 1, coins: 0, stars: [0, 0, 0, 0, 0], eq: Object.assign({}, DATA.defauts), owned: [], sound: true, quality: 'auto', speed: 0, offered: false }; }
+const NL = DATA.niveaux.length;
+function defSave() { return { v: 1, coins: 0, stars: new Array(NL).fill(0), levels: [0], eq: Object.assign({}, DATA.defauts), owned: [], sound: true, quality: 'auto', speed: 0, offered: false, keys: 'fleches' }; }
 function sanitize(o) {
   const d = defSave(); if (!o || typeof o !== 'object') return d;
   d.coins = Number.isFinite(o.coins) ? Math.max(0, Math.min(1e6, Math.floor(o.coins))) : 0;
   if (Array.isArray(o.stars)) d.stars = d.stars.map((_, i) => { const s = Math.floor(o.stars[i]); return s >= 0 && s <= 3 ? s : 0; });
+  /* niveaux possédés (achetés dans la boutique) ; anciennes sauvegardes : on garde l’accès aux niveaux déjà ouverts */
+  const lv = new Set([0]);
+  if (Array.isArray(o.levels)) o.levels.forEach(n => { if (Number.isInteger(n) && n >= 0 && n < NL) lv.add(n); });
+  else if (Array.isArray(o.stars)) o.stars.forEach((st, i) => { if (st >= 1 && i + 1 < NL) lv.add(i + 1); });
+  d.levels = [...lv].sort((a, b) => a - b);
+  d.keys = o.keys === 'lettres' ? 'lettres' : 'fleches';
   DATA.categories.forEach(c => { const n = o.eq && Number.isInteger(o.eq[c.id]) ? o.eq[c.id] : d.eq[c.id]; d.eq[c.id] = n >= 0 && n < c.items.length ? n : DATA.defauts[c.id]; });
   const own = new Set(); if (Array.isArray(o.owned)) o.owned.forEach(s => { if (typeof s === 'string' && /^[a-z]+:\d+$/.test(s)) { const [c, i] = s.split(':'), cat = DATA.categories.find(x => x.id === c); if (cat && +i < cat.items.length) own.add(s); } });
   DATA.categories.forEach(c => c.items.forEach((it, i) => { if (it.p === 0 || d.eq[c.id] === i && false) own.add(c.id + ':' + i); }));
@@ -49,8 +56,10 @@ const canvas = $('#gl');
 const E = createEngine(canvas, {
   onSfx: n => { if (SFX[n]) SFX[n](); },
   onHud: updateHud,
-  onEnd: showResult
+  onEnd: showResult,
+  onKeys: m => { save.keys = m; persist(); }
 });
+E.setKeys(save.keys);
 function fit() { E.resize(window.innerWidth, window.innerHeight); }
 addEventListener('resize', fit); fit(); E.setQuality(save.quality);
 
@@ -67,43 +76,54 @@ applyLook(null);
 const SCR = ['home', 'map', 'hud', 'pause', 'result', 'shop', 'settings'];
 let cur = 'home';
 function show(id) { cur = id; SCR.forEach(s => $('#scr-' + s).classList.toggle('on', s === id)); document.body.dataset.scr = id; }
-function btn(cls, icon, label, fn) { const b = document.createElement('button'); b.className = 'rb ' + cls; b.setAttribute('aria-label', label); b.innerHTML = ic(icon); b.addEventListener('click', () => { SFX.click(); fn(); }); return b; }
+/* libellé courbé le long du bas d’un bouton rond */
+let arcN = 0;
+function arc(el, text) {
+  if (!text) return; const id = 'arc' + (++arcN), t = text.toUpperCase(), fs = Math.min(15, 112 / (0.72 * t.length));
+  el.classList.add('lab');
+  el.insertAdjacentHTML('beforeend', `<svg class="arc" viewBox="0 0 100 100" aria-hidden="true"><path id="${id}" d="M 12 50 A 38 38 0 0 0 88 50" fill="none"/><text font-size="${fs.toFixed(1)}"><textPath href="#${id}" startOffset="50%" text-anchor="middle">${t}</textPath></text></svg>`);
+}
+function setIcon(el, name) { el.innerHTML = ic(name); arc(el, el.dataset.t); }
+function btn(cls, icon, label, fn, text) { const b = document.createElement('button'); b.className = 'rb ' + cls; b.setAttribute('aria-label', label); b.innerHTML = ic(icon); arc(b, text); b.addEventListener('click', () => { SFX.click(); fn(); }); return b; }
 function coinsText() { return `${ic('coin')}<b>${save.coins}</b>`; }
 function refreshCoins() { document.querySelectorAll('.coinbar').forEach(e => e.innerHTML = coinsText()); }
 
 /* accueil */
 let themeHome = Math.floor(Math.random() * 5);
-function goHome() { E.menu(themeHome); show('home'); refreshCoins(); updateInstallBtn(); }
+function goHome() { E.menu(themeHome); show('home'); refreshCoins(); updateInstallBtn(); maybeShowUpdate(); }
 {
   const h = $('#scr-home');
-  h.querySelector('.play').innerHTML = ic('play'); h.querySelector('.play').addEventListener('click', () => { SFX.click(); goMap(); });
-  h.querySelector('.b-shop').innerHTML = ic('bag'); h.querySelector('.b-shop').addEventListener('click', () => { SFX.click(); goShop(); });
-  h.querySelector('.b-set').innerHTML = ic('gear'); h.querySelector('.b-set').addEventListener('click', () => { SFX.click(); goSettings(); });
-  h.querySelector('.b-inst').innerHTML = ic('download'); h.querySelector('.b-inst').addEventListener('click', () => { SFX.click(); openInstall(); });
+  setIcon(h.querySelector('.play'), 'play'); h.querySelector('.play').addEventListener('click', () => { SFX.click(); goMap(); });
+  setIcon(h.querySelector('.b-shop'), 'bag'); h.querySelector('.b-shop').addEventListener('click', () => { SFX.click(); goShop(); });
+  setIcon(h.querySelector('.b-set'), 'gear'); h.querySelector('.b-set').addEventListener('click', () => { SFX.click(); goSettings(); });
+  setIcon(h.querySelector('.b-inst'), 'download'); h.querySelector('.b-inst').addEventListener('click', () => { SFX.click(); openInstall(); });
 }
 
-/* carte des niveaux */
+/* carte des niveaux : seuls les niveaux achetés dans la boutique se jouent */
 let selLevel = 0, selSpeed = save.speed;
-function unlocked(i) { return i === 0 || save.stars[i - 1] >= 1; }
-function goMap() {
-  const first = save.stars.findIndex((s, i) => s === 0 && unlocked(i)); selLevel = first < 0 ? 0 : first; selSpeed = save.speed;
-  drawMap(); show('map'); E.menu(DATA.niveaux ? LEVELS[selLevel].theme : 0); refreshCoins();
+const owns = i => save.levels.includes(i);
+function goMap(want) {
+  let first = save.levels.find(i => save.stars[i] === 0); if (first === undefined) first = save.levels[save.levels.length - 1];
+  selLevel = Number.isInteger(want) && owns(want) ? want : first; selSpeed = save.speed;
+  drawMap(); show('map'); E.menu(LEVELS[selLevel].theme); refreshCoins();
 }
+const VAR_ICON = ['', 'sunset', 'moon'];
 function drawMap() {
   const box = $('#levels'); box.innerHTML = '';
   DATA.niveaux.forEach((n, i) => {
-    const ok = unlocked(i), d = document.createElement('button'); d.className = 'lv' + (i === selLevel ? ' sel' : '') + (ok ? '' : ' lock'); d.setAttribute('aria-label', n.nom + (ok ? '' : ' (verrouillé)'));
-    d.innerHTML = `<span class="lvi t${i}">${ic(n.icon)}</span><span class="stars">${[0, 1, 2].map(k => ic(k < save.stars[i] ? 'star' : 'starO')).join('')}</span>${ok ? '' : `<span class="lk">${ic('lock')}</span>`}`;
-    d.addEventListener('click', () => { if (!ok) { SFX.hit(); return; } SFX.click(); selLevel = i; E.menu(LEVELS[i].theme); drawMap(); });
+    const ok = owns(i), d = document.createElement('button'); d.className = 'lv' + (i === selLevel ? ' sel' : '') + (ok ? '' : ' lock'); d.setAttribute('aria-label', n.nom + (ok ? '' : ' (à débloquer, ' + n.p + ' pièces)'));
+    d.innerHTML = `<span class="lvi t${i % 5}">${ic(n.icon)}</span><span class="nm">${n.nom}</span><span class="stars">${[0, 1, 2].map(k => ic(k < save.stars[i] ? 'star' : 'starO')).join('')}</span>${n.var ? `<span class="vb">${ic(VAR_ICON[n.var])}</span>` : ''}${ok ? '' : `<span class="lk">${ic('lock')}</span><span class="pr">${ic('coin')}<b>${n.p}</b></span>`}`;
+    d.addEventListener('click', () => { if (!ok) { SFX.click(); goShop(0, i); return; } SFX.click(); selLevel = i; E.menu(LEVELS[i].theme); drawMap(); });
     box.appendChild(d);
   });
+  const sel = box.children[selLevel]; if (sel && sel.scrollIntoView) { try { box.scrollLeft = Math.max(0, sel.offsetLeft - box.clientWidth / 2 + sel.offsetWidth / 2); } catch (e) { } }
   const sp = $('#speeds'); sp.innerHTML = '';
-  ['snail', 'rabbit', 'cheetah'].forEach((n, i) => { const b = document.createElement('button'); b.className = 'sp' + (i === selSpeed ? ' sel' : ''); b.setAttribute('aria-label', ['lent', 'moyen', 'rapide'][i]); b.innerHTML = ic(n); b.addEventListener('click', () => { SFX.click(); selSpeed = i; save.speed = i; persist(); drawMap(); }); sp.appendChild(b); });
+  ['snail', 'rabbit', 'cheetah'].forEach((n, i) => { const b = document.createElement('button'); b.className = 'sp' + (i === selSpeed ? ' sel' : ''); b.setAttribute('aria-label', ['lent', 'moyen', 'rapide'][i]); b.innerHTML = ic(n); arc(b, ['lent', 'moyen', 'rapide'][i]); b.addEventListener('click', () => { SFX.click(); selSpeed = i; save.speed = i; persist(); drawMap(); }); sp.appendChild(b); });
 }
 {
   const m = $('#scr-map');
-  m.querySelector('.back').innerHTML = ic('back'); m.querySelector('.back').addEventListener('click', () => { SFX.click(); goHome(); });
-  m.querySelector('.go').innerHTML = ic('play'); m.querySelector('.go').addEventListener('click', () => { SFX.click(); startGame(selLevel, selSpeed); });
+  setIcon(m.querySelector('.back'), 'back'); m.querySelector('.back').addEventListener('click', () => { SFX.click(); goHome(); });
+  setIcon(m.querySelector('.go'), 'play'); m.querySelector('.go').addEventListener('click', () => { SFX.click(); startGame(selLevel, selSpeed); });
 }
 
 /* partie */
@@ -122,29 +142,41 @@ function updateHud(h) {
   $('#bar u').innerHTML = ic('runner'); $('#bar s').innerHTML = ic('flag'); $('#warn').innerHTML = ic('chaser');
   const p = $('#btn-pause'); p.innerHTML = ic('pause'); p.addEventListener('click', () => { SFX.click(); E.pause(true); show('pause'); document.body.classList.add('over'); });
   const ps = $('#scr-pause .row');
-  ps.appendChild(btn('big', 'play', 'reprendre', () => { E.pause(false); show('hud'); document.body.classList.remove('over'); }));
-  ps.appendChild(btn('', 'replay', 'recommencer', () => { document.body.classList.remove('over'); startGame(lastRun.li, lastRun.si); }));
-  ps.appendChild(btn('', 'home', 'accueil', () => { document.body.classList.remove('over'); goHome(); }));
+  ps.appendChild(btn('big', 'play', 'reprendre', () => { E.pause(false); show('hud'); document.body.classList.remove('over'); }, 'Reprendre'));
+  ps.appendChild(btn('', 'replay', 'recommencer', () => { document.body.classList.remove('over'); startGame(lastRun.li, lastRun.si); }, 'Rejouer'));
+  ps.appendChild(btn('', 'home', 'accueil', () => { document.body.classList.remove('over'); goHome(); }, 'Accueil'));
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden && cur === 'hud') { E.pause(true); show('pause'); document.body.classList.add('over'); } });
 
-/* résultat */
+/* résultat : on voit toujours quoi faire ensuite (suite, rejouer, boutique) */
 function showResult(r) {
   const gain = r.coins; save.coins += gain;
   if (r.win) { save.stars[r.level] = Math.max(save.stars[r.level], r.stars); }
   persist();
-  const box = $('#scr-result .panel'); const hasNext = r.win && r.level < 4;
-  box.innerHTML = `<div class="rstars">${r.win ? [0, 1, 2].map(k => `<span class="rs ${k < r.stars ? 'on' : ''}" style="animation-delay:${0.25 + k * 0.35}s">${ic(k < r.stars ? 'star' : 'starO')}</span>`).join('') : `<span class="sad">${ic('chaser')}</span>`}</div><div class="gain">${ic('coin')}<b>+${gain}</b></div><div class="row"></div>`;
-  const row = box.querySelector('.row');
-  row.appendChild(btn('', 'replay', 'rejouer', () => startGame(r.level, r.speed)));
-  if (hasNext) row.appendChild(btn('big', 'next', 'niveau suivant', () => startGame(r.level + 1, r.speed)));
-  row.appendChild(btn('', 'home', 'accueil', () => goHome()));
+  const box = $('#scr-result .panel'), nxt = r.win && r.level + 1 < NL ? r.level + 1 : -1, nv = nxt >= 0 ? DATA.niveaux[nxt] : null;
+  box.innerHTML = `<h2 class="ttl">${r.win ? 'Bravo !' : 'Raté…'}</h2><div class="rstars">${r.win ? [0, 1, 2].map(k => `<span class="rs ${k < r.stars ? 'on' : ''}" style="animation-delay:${0.25 + k * 0.35}s">${ic(k < r.stars ? 'star' : 'starO')}</span>`).join('') : `<span class="sad">${ic('chaser')}</span>`}</div><div class="gain">${ic('coin')}<b>+${gain}</b></div><div class="sub">${ic('coin', 'inl')} ${save.coins} en tout</div><div class="stack"></div><div class="row"></div>`;
+  const st = box.querySelector('.stack'), row = box.querySelector('.row');
+  const wide = (cls, html, fn) => { const b = document.createElement('button'); b.className = 'wide ' + cls; b.innerHTML = html; b.addEventListener('click', () => { SFX.click(); fn(); }); st.appendChild(b); return b; };
+  if (r.win && nv) {
+    if (owns(nxt)) wide('', `${ic('next')}<span>Niveau suivant : ${nv.nom}</span>`, () => startGame(nxt, r.speed));
+    else if (save.coins >= nv.p) wide('', `${ic('lock')}<span>Débloquer ${nv.nom}</span><b>${ic('coin')}${nv.p}</b>`, () => { save.coins -= nv.p; save.levels.push(nxt); save.levels.sort((a, b) => a - b); persist(); SFX.power(); startGame(nxt, r.speed); });
+    else { wide('no', `${ic('lock')}<span>${nv.nom} : il te manque ${nv.p - save.coins}</span><b>${ic('coin')}</b>`, () => goShop(0, nxt)); }
+  } else if (r.win) wide('sec', `${ic('star')}<span>Tous les niveaux sont finis !</span>`, () => { });
+  if (r.win && r.stars >= 2 && r.speed < 2) wide('sec', `${ic(['rabbit', 'cheetah'][r.speed])}<span>Rejouer plus vite</span>`, () => { save.speed = r.speed + 1; persist(); startGame(r.level, r.speed + 1); });
+  row.appendChild(btn(r.win ? '' : 'big', 'replay', 'rejouer', () => startGame(r.level, r.speed), 'Rejouer'));
+  row.appendChild(btn('', 'bag', 'boutique', () => goShop(), 'Boutique'));
+  row.appendChild(btn('', 'home', 'accueil', () => goHome(), 'Accueil'));
   document.body.classList.add('over'); show('result'); setTimeout(() => document.body.classList.remove('over'), 0);
 }
 
 /* boutique */
 let shopCat = 0, pend = null;
-function goShop() { E.shopMode(themeHome); pend = null; applyLook(null); drawShop(); show('shop'); refreshCoins(); }
+/* onglet 0 = niveaux à débloquer ; les suivants = tenue et poursuivant */
+const CATS = [{ id: 'niveaux', icon: 'map', lv: true, focus: 'level', yaw: 0 }, ...DATA.categories];
+function goShop(cat = 0, lvl = null) {
+  shopCat = cat; pend = lvl !== null && !owns(lvl) ? { cat: 'niveaux', idx: lvl } : null;
+  E.shopMode(pend ? LEVELS[lvl].theme : themeHome); applyLook(null); drawShop(); show('shop'); refreshCoins();
+}
 function swatch(c, it) {
   const s = it.set, col = s.skin || s.hair || s.topColor || s.bottomColor || s.shoes || s.hatColor || s.backColor || s.neckColor;
   if (it.icon) return ic(it.icon);
@@ -155,10 +187,21 @@ function swatch(c, it) {
 }
 function drawShop() {
   const cats = $('#cats'); cats.innerHTML = '';
-  DATA.categories.forEach((c, i) => { const b = document.createElement('button'); b.className = 'cat' + (i === shopCat ? ' sel' : ''); b.setAttribute('aria-label', c.id); b.innerHTML = ic(c.icon); b.addEventListener('click', () => { SFX.click(); shopCat = i; pend = null; applyLook(null); drawShop(); }); cats.appendChild(b); });
-  const c = DATA.categories[shopCat]; E.shopView(c.focus === 'chaser' ? 'body' : c.focus, c.yaw, c.focus === 'chaser' ? 'chaser' : 'runner');
+  CATS.forEach((c, i) => { const b = document.createElement('button'); b.className = 'cat' + (i === shopCat ? ' sel' : ''); b.setAttribute('aria-label', c.id); b.innerHTML = ic(c.icon); b.addEventListener('click', () => { SFX.click(); shopCat = i; pend = null; E.shopMode(themeHome); applyLook(null); drawShop(); }); cats.appendChild(b); });
+  const c = CATS[shopCat]; E.shopView(c.focus === 'chaser' ? 'body' : c.focus, c.yaw, c.focus === 'chaser' ? 'chaser' : 'runner');
   const box = $('#items'); box.innerHTML = '';
-  c.items.forEach((it, i) => {
+  if (c.lv) DATA.niveaux.forEach((n, i) => {
+    const owned = owns(i), d = document.createElement('button');
+    d.className = 'item lvit' + (pend && pend.idx === i ? ' pv' : '') + (owned ? '' : ' buy'); d.setAttribute('aria-label', n.nom + (owned ? '' : ', ' + n.p + ' pièces'));
+    d.innerHTML = `<span class="lvi t${i % 5}">${ic(n.icon)}${n.var ? `<span class="vb" style="position:absolute;right:-6px;top:-6px;width:20px;height:20px;border-radius:50%;background:rgba(15,22,40,.85);color:#f6dfaa;padding:3px;font-size:14px">${ic(VAR_ICON[n.var])}</span>` : ''}</span><span class="nm">${n.nom}</span>${owned ? `<span class="ok">${ic('check')}</span>` : `<span class="pr">${ic('coin')}<b>${n.p}</b></span>`}`;
+    d.addEventListener('click', () => {
+      SFX.click();
+      if (owned) { goMap(i); return; }
+      pend = { cat: 'niveaux', idx: i }; E.shopMode(LEVELS[i].theme); drawShop();
+    });
+    box.appendChild(d);
+  });
+  else c.items.forEach((it, i) => {
     const owned = save.owned.includes(c.id + ':' + i), eq = save.eq[c.id] === i, d = document.createElement('button');
     d.className = 'item' + (eq && !pend ? ' on' : '') + (pend && pend.idx === i ? ' pv' : '') + (owned ? '' : ' buy');
     d.innerHTML = `<span class="sw">${swatch(c, it)}</span>${owned ? (eq ? `<span class="ok">${ic('check')}</span>` : '') : `<span class="pr">${ic('coin')}<b>${it.p}</b></span>`}`;
@@ -171,17 +214,19 @@ function drawShop() {
   });
   const bb = $('#buybar'); bb.innerHTML = '';
   if (pend) {
-    const it = c.items[pend.idx], can = save.coins >= it.p;
+    const it = c.lv ? DATA.niveaux[pend.idx] : c.items[pend.idx], can = save.coins >= it.p;
     const b = document.createElement('button'); b.className = 'buy-btn' + (can ? '' : ' no'); b.setAttribute('aria-label', 'acheter');
     b.innerHTML = `${ic('bag')}<span>${ic('coin')}<b>${it.p}</b></span>`;
     b.addEventListener('click', () => {
       if (!can) { SFX.hit(); b.classList.add('shake'); setTimeout(() => b.classList.remove('shake'), 400); return; }
-      save.coins -= it.p; save.owned.push(c.id + ':' + pend.idx); save.eq[c.id] = pend.idx; pend = null; persist(); SFX.power(); applyLook(null); drawShop(); refreshCoins();
+      save.coins -= it.p;
+      if (c.lv) { save.levels.push(pend.idx); save.levels.sort((a, b) => a - b); } else { save.owned.push(c.id + ':' + pend.idx); save.eq[c.id] = pend.idx; }
+      pend = null; persist(); SFX.power(); applyLook(null); drawShop(); refreshCoins();
     });
     bb.appendChild(b);
   }
 }
-{ const s = $('#scr-shop'); s.querySelector('.back').innerHTML = ic('back'); s.querySelector('.back').addEventListener('click', () => { SFX.click(); pend = null; applyLook(null); goHome(); }); }
+{ const s = $('#scr-shop'); setIcon(s.querySelector('.back'), 'back'); s.querySelector('.back').addEventListener('click', () => { SFX.click(); pend = null; applyLook(null); goHome(); }); }
 
 /* modales */
 function modal(html, onClose) {
@@ -198,8 +243,10 @@ function drawSettings() {
   const box = $('#setbox'); box.innerHTML = '';
   const row = (icon, label, ctrl) => { const d = document.createElement('div'); d.className = 'srow'; d.innerHTML = `<span class="si">${ic(icon)}</span><span class="sl">${label}</span>`; d.appendChild(ctrl); box.appendChild(d); };
   const snd = document.createElement('button'); snd.className = 'tg' + (save.sound ? ' on' : ''); snd.setAttribute('aria-label', 'son'); snd.innerHTML = ic(save.sound ? 'speaker' : 'speakerOff'); snd.addEventListener('click', () => { save.sound = !save.sound; persist(); SFX.click(); drawSettings(); }); row('speaker', 'Son', snd);
-  const q = document.createElement('div'); q.className = 'seg'; [['auto', 'Auto'], ['bas', 'Bas'], ['haut', 'Haut']].forEach(([k, t]) => { const b = document.createElement('button'); b.textContent = t; b.className = save.quality === k ? 'on' : ''; b.addEventListener('click', () => { save.quality = k; persist(); E.setQuality(k); drawSettings(); }); q.appendChild(b); }); row('gear', 'Qualité 3D', q);
+  const q = document.createElement('div'); q.className = 'seg'; [['auto', 'Auto'], ['bas', 'Bas'], ['haut', 'Haut']].forEach(([k, t]) => { const b = document.createElement('button'); b.textContent = t; b.className = save.quality === k ? 'on' : ''; b.addEventListener('click', () => { save.quality = k; persist(); E.setQuality(k); drawSettings(); }); q.appendChild(b); }); row('sparkle', 'Qualité 3D', q);
+  const kb = document.createElement('div'); kb.className = 'seg'; [['fleches', 'Flèches'], ['lettres', 'ZQSD']].forEach(([k, t]) => { const b = document.createElement('button'); b.textContent = t; b.className = save.keys === k ? 'on' : ''; b.addEventListener('click', () => { save.keys = k; persist(); E.setKeys(k); drawSettings(); }); kb.appendChild(b); }); row('keyboard', 'Clavier (ordinateur)', kb);
   const mk = (icon, label, fn) => { const b = document.createElement('button'); b.className = 'tg'; b.setAttribute('aria-label', label); b.innerHTML = ic(icon); b.addEventListener('click', () => { SFX.click(); fn(); }); return b; };
+  row('refresh', 'Vérifier les mises à jour', mk('refresh', 'mettre à jour', () => checkUpdate(true)));
   row('download', 'Exporter la sauvegarde', mk('download', 'exporter', exportData));
   row('upload', 'Importer une sauvegarde', mk('upload', 'importer', () => $('#file').click()));
   row('trash', 'Effacer la progression', mk('trash', 'effacer', confirmErase));
@@ -207,7 +254,7 @@ function drawSettings() {
   row('shieldLock', 'Confidentialité', mk('shieldLock', 'confidentialité', () => textPage('Confidentialité', DATA.textes.confidentialite)));
   if (canInstall()) row('download', 'Installer le jeu', mk('download', 'installer', openInstall));
 }
-{ const s = $('#scr-settings'); s.querySelector('.back').innerHTML = ic('back'); s.querySelector('.back').addEventListener('click', () => { SFX.click(); goHome(); }); }
+{ const s = $('#scr-settings'); setIcon(s.querySelector('.back'), 'back'); s.querySelector('.back').addEventListener('click', () => { SFX.click(); goHome(); }); }
 function exportData() {
   try { const blob = new Blob([JSON.stringify(save, null, 1)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'fuite-abel-sauvegarde.json'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); }
   catch (e) { modal(`<p>L’export a échoué sur cet appareil.</p><div class="row"><button class="rb" data-close>${ic('check')}</button></div>`); }
@@ -241,13 +288,48 @@ function maybeOffer() {
   m.el.querySelector('#inst').onclick = () => { m.close(); openInstall(); };
 }
 
+/* mise à jour : panneau plein écran, impossible à manquer */
+const SEEN = 'seen';
+const upd = $('#update');
+function updPanel(html, onGo) {
+  upd.innerHTML = html; upd.classList.add('on');
+  const b = upd.querySelector('.wide'); if (b) { b.addEventListener('click', () => { SFX.click(); onGo(); }); try { b.focus(); } catch (e) { } }
+}
+function showNews() {
+  const lis = DATA.textes.nouveautes.map(([i, t]) => `<li>${ic(i)}<span>${t}</span></li>`).join('');
+  updPanel(`<div class="big">${ic('sparkle')}</div><h1 id="upt">Nouveautés</h1><p>Version ${DATA.version}</p><ul>${lis}</ul><button class="wide">${ic('play')}<span>C’est parti !</span></button>`, () => { upd.classList.remove('on'); upd.innerHTML = ''; });
+}
+const newer = (a, b) => { const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; };
+async function doUpdate() {
+  try { if ('serviceWorker' in navigator) { const rs = await navigator.serviceWorker.getRegistrations(); await Promise.all(rs.map(r => r.unregister())); } } catch (e) { }
+  try { if (window.caches) { const ks = await caches.keys(); await Promise.all(ks.filter(k => k.startsWith('fuite-abel-')).map(k => caches.delete(k))); } } catch (e) { }
+  location.reload();
+}
+let pendingUpdate = null;
+function showUpdate(v) {
+  updPanel(`<div class="big">${ic('download')}</div><h1 id="upt">Mise à jour</h1><p>Une nouvelle version du jeu est prête (${v}).</p><button class="wide">${ic('refresh')}<span>Mettre à jour</span></button>`, doUpdate);
+}
+function maybeShowUpdate() { if (pendingUpdate && cur !== 'hud' && !upd.classList.contains('on')) showUpdate(pendingUpdate); }
+async function checkUpdate(manual) {
+  try {
+    const res = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (!res.ok) throw new Error('http');
+    const v = (await res.json()).version;
+    if (typeof v === 'string' && /^\d+\.\d+\.\d+$/.test(v) && newer(v, DATA.version)) { pendingUpdate = v; maybeShowUpdate(); return; }
+    if (manual) modal(`<p>${ic('check', 'big')}</p><h2>Le jeu est à jour</h2><p>Version ${DATA.version}</p><div class="row"><button class="rb" data-close aria-label="fermer">${ic('check')}</button></div>`);
+  } catch (e) { if (manual) modal(`<h2>Pas de connexion</h2><p>Impossible de chercher une mise à jour pour le moment.</p><div class="row"><button class="rb" data-close aria-label="fermer">${ic('close')}</button></div>`); }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkUpdate(false); });
+setInterval(() => { if (cur !== 'hud') checkUpdate(false); }, 600000);
+
 /* démarrage */
 $('#boot').remove();
 goHome();
-setTimeout(() => { if (!deferred) maybeOffer(); }, 4000);
+{ let seen = null; try { seen = sGet(SEEN); } catch (e) { } if (seen !== DATA.version) { sSet(SEEN, DATA.version); if (seen || sGet('save') !== null) showNews(); } }
+checkUpdate(false);
+setTimeout(() => { if (!deferred && !upd.classList.contains('on')) maybeOffer(); }, 4000);
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   let reloaded = false;
   navigator.serviceWorker.register('sw.js').then(reg => { reg.update && reg.update(); }).catch(() => { });
-  navigator.serviceWorker.addEventListener('controllerchange', () => { if (reloaded) return; reloaded = true; if (cur !== 'hud') location.reload(); });
+  
 }
 window.__E = E; window.__save = () => save;
