@@ -1,4 +1,4 @@
-/* Projet : La fuite d’Abel  ·  Version : 1.5.0  ·  Date : 17/11/2026
+/* Projet : La fuite d’Abel  ·  Version : 1.6.0  ·  Date : 17/11/2026
    Auteur : Tom Rougeaud  ·  Licence : CC BY-NC 4.0
    Réalisé avec l’aide de l’IA : Claude Sonnet 5.5 (Anthropic) */
 import * as THREE from 'three';
@@ -51,7 +51,7 @@ export function genLevel(li, si) {
     // pièces de la zone de dégagement : le chemin glisse vers la nouvelle voie
     /* danger de la zone : décidé avant, pour élargir l’écart si la voie à quitter est concernée */
     const hOuter = [0, 2].filter(l => l !== newSafe && l !== prevSafe), hLeaves = prevSafe !== newSafe && prevSafe !== 1;
-    const hz = rows >= 2 && r() < 0.7 + 0.3 * diff ? { pull: r() < 0.5, early: hLeaves && r() < 0.7 } : null;
+    const hz = rows >= 2 && r() < 0.85 + 0.15 * diff ? { pull: r() < 0.5, early: hLeaves && r() < 0.7 } : null;
     const hvf = v * (1 + 0.25 * Math.min(1, d / L.len));
     if (hz && hz.early) d += 0.5 * hvf; /* voie à quitter : il faut laisser le temps de réagir */
     if (hz && !hz.early && !hOuter.length) hz.none = true;
@@ -72,10 +72,12 @@ export function genLevel(li, si) {
     }
     /* circulation de la zone : véhicules dans les voies que le trajet n’emprunte pas */
     { const lo = Math.min(prevSafe, newSafe), hi = Math.max(prevSafe, newSafe), hzl = hz && !hz.none ? (hz.early ? prevSafe : -2) : -2;
-      for (let l = 0; l < 3; l++) { if (l >= lo && l <= hi) continue; if (g1 - g0 < 12 || r() > 0.55 + 0.25 * diff) continue;
-        const k = pv2(), len = SIZE[k][0], d0z = g0 + 1 + r() * Math.max(0, g1 - g0 - len - 2);
-        if (obs.some(o => o.lane === l && o.d1 > d0z - 1 && o.d0 < d0z + len + 1)) continue;
-        obs.push({ kind: k, lane: l, x: LX[l], d0: d0z, d1: d0z + len, len, hw: SIZE[k][1] / 2, top: SIZE[k][2], type: 'block', variant: (r() * 6) | 0 }); haz.push({ d0: d0z, d1: d0z + len, x: LX[l] }); } }
+      for (let l = 0; l < 3; l++) { if (l >= lo && l <= hi) continue;
+        /* jusqu’à deux véhicules par voie libre : du trafic dense, la voie du trajet reste dégagée */
+        for (let n = 0; n < 2; n++) { if (g1 - g0 < 12 || r() > (n ? 0.5 + 0.3 * diff : 0.88 + 0.1 * diff)) continue;
+          const k = pv2(), len = SIZE[k][0], d0z = g0 + 1 + r() * Math.max(0, g1 - g0 - len - 2);
+          if (obs.some(o => o.lane === l && o.d1 > d0z - 2 && o.d0 < d0z + len + 2)) continue;
+          obs.push({ kind: k, lane: l, x: LX[l], d0: d0z, d1: d0z + len, len, hw: SIZE[k][1] / 2, top: SIZE[k][2], type: 'block', variant: (r() * 6) | 0 }); haz.push({ d0: d0z, d1: d0z + len, x: LX[l] }); } } }
     let rowLen = 1;
     const sl = kind === 'free' ? 0 : addObs(kind, newSafe, d);
     if (kind === 'free') rowLen = 10; else rowLen = sl;
@@ -111,7 +113,7 @@ export function genLevel(li, si) {
     /* série : un second obstacle suit de près sur la même voie (saute, puis glisse) */
     lastCombo = combo; combo = rows > 3 && !lastCombo && (kind === 'barrier' || kind === 'beam') && r() < 0.18 + 0.4 * diff;
     const vf = v * (1 + 0.25 * Math.min(1, d / L.len)); /* vitesse réelle à cet endroit : l’écart reste faisable (un saut dure 0,77 s) */
-    d = prevEnd + (combo ? vf * 0.8 + 4 : Math.max(9, vf * (0.84 + 0.08 * (1 - Math.min(1, diff))) + r() * 0.1 * vf));
+    d = prevEnd + (combo ? vf * 0.8 + 4 : Math.max(9, vf * (0.78 + 0.06 * (1 - Math.min(1, diff))) + r() * 0.08 * vf));
   }
   // fin de parcours : dernière ligne de pièces vers l’arche
   const g0 = prevEnd + 2; for (let dd = g0; dd < L.len - 4; dd += 3) { const u = (dd - g0) / Math.max(1, L.len - 4 - g0); coin(dd, LX[safe] + (0 - LX[safe]) * sm(0.1, 0.5, u), 1.0); }

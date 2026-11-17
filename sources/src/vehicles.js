@@ -1,4 +1,4 @@
-/* Projet : La fuite d’Abel  ·  Version : 1.5.0  ·  Date : 17/11/2026
+/* Projet : La fuite d’Abel  ·  Version : 1.6.0  ·  Date : 17/11/2026
    Auteur : Tom Rougeaud  ·  Licence : CC BY-NC 4.0
    Réalisé avec l’aide de l’IA : Claude Sonnet 5.5 (Anthropic) */
 import * as THREE from 'three';
