@@ -120,6 +120,20 @@ export function makeBarrier() {
   g.userData = { w: 2.6, h: 0.9, l: 0.7 };
   return g;
 }
+/* objets qui tombent : caisse en bois, tonneau */
+export function makeCrate(c = '#b98a4e') {
+  const g = new THREE.Group(), w = mat(c, 0.85), d = mat('#8a6030', 0.9);
+  add(g, rbox(1.7, 1.5, 1.7, 0.06, w), 0, 0.75, 0);
+  for (const y of [0.12, 1.38]) add(g, rbox(1.76, 0.14, 1.76, 0.02, d), 0, y, 0);
+  for (const s of [-1, 1]) { add(g, rbox(0.14, 1.5, 1.76, 0.02, d), s * 0.78, 0.75, 0); add(g, rbox(1.76, 1.5, 0.14, 0.02, d), 0, 0.75, s * 0.78); }
+  g.userData = { w: 1.7, h: 1.5, l: 1.7 }; return g;
+}
+export function makeBarrel(c = '#3f6f8f') {
+  const g = new THREE.Group(), m = mat(c, 0.55), band = mat('#2a2f38', 0.6, 0.5);
+  add(g, mesh(new THREE.CylinderGeometry(0.72, 0.72, 1.5, 22), m), 0, 0.75, 0);
+  for (const y of [0.2, 0.75, 1.3]) add(g, mesh(new THREE.CylinderGeometry(0.75, 0.75, 0.1, 22), band), 0, y, 0);
+  g.userData = { w: 1.5, h: 1.5, l: 1.5 }; return g;
+}
 export function makeBeam() {
   const g = new THREE.Group(), red = mat('#c8412f', 0.6), wm = mat('#ece7da', 0.7), post = mat('#4a4f58', 0.6, 0.3);
   for (const s of [-1, 1]) { add(g, rbox(0.28, 2.6, 0.28, 0.05, post), s * 1.5, 1.3, 0); add(g, rbox(0.6, 0.12, 0.6, 0.03, post), s * 1.5, 0.06, 0); }
@@ -155,6 +169,8 @@ export function proto(kind, variant = 0) {
     case 'busramp': g = makeBusRamp(BUS[variant % BUS.length]); break;
     case 'barrier': g = makeBarrier(); break;
     case 'beam': g = makeBeam(); break;
+    case 'crate': g = makeCrate(['#b98a4e', '#a87a42', '#c79a5c'][variant % 3]); break;
+    case 'barrel': g = makeBarrel(['#3f6f8f', '#a8503b', '#4f7a4a'][variant % 3]); break;
   }
   return PROTO[k] = mergeGroup(g);
 }

@@ -7,11 +7,11 @@ import { badgeTexture } from './icons.js';
 
 export const LANE = 3.2, LX = [-LANE, 0, LANE];
 /* vitesse de défilement (m/s) : seul le décor accélère, pas la cadence des jambes */
-export const SPEEDS = [13, 17, 21];
+export const SPEEDS = [22, 30, 38];
 /* 15 niveaux : 5 décors × (jour, soir, nuit). Plus on avance, plus c’est long, rapide et chargé. */
-export const LEVELS = Array.from({ length: 15 }, (_, i) => ({ theme: (i % 5) + 5 * Math.floor(i / 5), len: 1000 + 150 * i, diff: 0.4 + 0.05 * i, vmul: 1 + 0.01 * i, seed: 11 * (i + 1) }));
+export const LEVELS = Array.from({ length: 15 }, (_, i) => ({ theme: (i % 5) + 5 * Math.floor(i / 5), len: 1500 + 200 * i, diff: 0.4 + 0.05 * i, vmul: 1 + 0.01 * i, seed: 11 * (i + 1) }));
 export const POWERS = { aimant: { icon: 'magnet', bg: '#c0392b', dur: 9 }, bouclier: { icon: 'shield', bg: '#2f7fd0', dur: 14 }, envol: { icon: 'balloon', bg: '#d9578a', dur: 5.5 }, x2: { icon: 'x2', bg: '#7a4fb8', dur: 10 }, coeur: { icon: 'heart', bg: '#d1344a', dur: 0 } };
-const SIZE = { sedan: [4.8, 1.9, 1.7], pickup: [5.6, 2.05, 2.1], van: [5.2, 2.1, 2.45], truck: [17.6, 2.55, 4.0], bus: [11.5, 2.5, 3.0], busramp: [18.5, 2.5, 3.0], barrier: [0.7, 2.6, 0.9], beam: [0.6, 3.3, 2.0] };
+const SIZE = { sedan: [4.8, 1.9, 1.7], pickup: [5.6, 2.05, 2.1], van: [5.2, 2.1, 2.45], truck: [17.6, 2.55, 4.0], bus: [11.5, 2.5, 3.0], busramp: [18.5, 2.5, 3.0], barrier: [0.7, 2.6, 0.9], beam: [0.6, 3.3, 2.0], crate: [1.8, 1.8, 1.5], barrel: [1.6, 1.6, 1.5] };
 const RAMP = 7;
 
 function mb(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
@@ -20,13 +20,14 @@ const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 
 /* ---------- génération d’un niveau (déterministe) ---------- */
 export function genLevel(li, si) {
-  const L = LEVELS[li], v = SPEEDS[si] * L.vmul, r = mb(L.seed * 100 + si), obs = [], coins = [], picks = [];
+  const L = LEVELS[li], v = SPEEDS[si] * L.vmul, r = mb(L.seed * 100 + si), obs = [], coins = [], picks = [], safes = [];
   const addObs = (kind, lane, d0, extra = {}) => {
     const [len, w, top] = SIZE[kind], type = kind === 'barrier' ? 'barrier' : kind === 'beam' ? 'beam' : kind === 'busramp' ? 'ramp' : 'block';
     obs.push(Object.assign({ kind, lane, x: LX[lane], d0, d1: d0 + len, len, hw: w / 2, top, type, variant: (r() * 6) | 0 }, extra));
     return len;
   };
-  const coin = (d, x, y) => coins.push({ d, x, y, got: false });
+  const coin = (d, x, y) => coins.push({ d, x, y, got: false }); const haz = [];
+  const pv = () => { const z = r(); return z < 0.3 ? 'sedan' : z < 0.5 ? 'pickup' : z < 0.7 ? 'van' : z < 0.8 ? 'truck' : 'bus'; }, pv2 = () => { const z = r(); return z < 0.45 ? 'sedan' : z < 0.75 ? 'pickup' : 'van'; };
   // tutoriel : ligne de pièces au centre, aucun obstacle
   for (let d = 10; d <= 46; d += 3) coin(d, 0, 1.0);
   let d = 54, safe = 1, prevEnd = 46, rows = 0, lastPick = 0, prevSafe = 1, combo = false, lastCombo = false;
@@ -40,8 +41,27 @@ export function genLevel(li, si) {
     const opts = [safe - 1, safe + 1].filter(l => l >= 0 && l <= 2);
     const newSafe = rows < 2 ? 1 : (combo ? safe : r() < 0.5 ? opts[(r() * opts.length) | 0] : safe);
     // pièces de la zone de dégagement : le chemin glisse vers la nouvelle voie
+    /* danger de la zone : décidé avant, pour élargir l’écart si la voie à quitter est concernée */
+    const hOuter = [0, 2].filter(l => l !== newSafe && l !== prevSafe), hLeaves = prevSafe !== newSafe && prevSafe !== 1;
+    const hz = rows >= 3 && r() < 0.5 + 0.3 * diff ? { pull: r() < 0.5, early: hLeaves && r() < 0.7 } : null;
+    const hvf = v * (1 + 0.25 * Math.min(1, d / L.len));
+    if (hz && hz.early && hz.pull) d += 0.5 * hvf;
+    if (hz && !hz.early && !hOuter.length) hz.none = true;
     const g0 = prevEnd + 2, g1 = d - 3;
     for (let dd = g0; dd <= g1; dd += 3) { const u = g1 > g0 ? (dd - g0) / (g1 - g0) : 1; coin(dd, LX[prevSafe] + (LX[newSafe] - LX[prevSafe]) * sm(0.15, 0.85, u), 1.0); }
+    /* dangers de la zone : voiture qui sort de son stationnement, objet qui tombe */
+    if (hz && !hz.none && g1 - g0 >= 13) {
+      const hl = hz.early ? prevSafe : hOuter[(r() * hOuter.length) | 0], span = g1 - g0, sd = Math.sign(LX[hl]) || 1;
+      if (hz.pull) {
+        const k = pv2(), len = SIZE[k][0], d0h = hz.early ? prevEnd + 0.75 * hvf + r() * 0.2 * hvf : g0 + 1 + r() * Math.max(0, span - len - 3);
+        obs.push({ kind: k, lane: hl, x: sd * 5.7, xPark: sd * 5.7, xLane: LX[hl], d0: d0h, d1: d0h + len, len, hw: SIZE[k][1] / 2, top: SIZE[k][2], type: 'block', variant: (r() * 6) | 0, dyn: 'pull', p: 0, on: false });
+        haz.push({ d0: d0h, d1: d0h + len, x: LX[hl] });
+      } else {
+        const k = r() < 0.5 ? 'crate' : 'barrel', len = SIZE[k][0], d0h = g0 + 2 + (hz.early ? r() * 0.2 * span : r() * Math.max(0, span - 6));
+        obs.push({ kind: k, lane: hl, x: LX[hl], d0: d0h, d1: d0h + len, len, hw: SIZE[k][1] / 2, top: 1.5, type: 'block', variant: (r() * 3) | 0, dyn: 'drop', p: 0, on: false, landed: false, fy: 9 });
+        haz.push({ d0: d0h, d1: d0h + len, x: LX[hl] });
+      }
+    }
     let rowLen = 1;
     const sl = kind === 'free' ? 0 : addObs(kind, newSafe, d);
     if (kind === 'free') rowLen = 10; else rowLen = sl;
@@ -53,13 +73,17 @@ export function genLevel(li, si) {
     // autres voies
     for (let lane = 0; lane < 3; lane++) {
       if (lane === newSafe) continue;
-      const pBlock = Math.min(0.93, (kind === 'free' ? 0.4 : 0.55) + 0.4 * diff);
+      const pBlock = Math.min(0.97, (kind === 'free' ? 0.6 : 0.72) + 0.3 * diff);
       if (rows < 2) continue;
       const q2 = r();
-      if (q2 < pBlock) { const k = (() => { const z = r(); return z < 0.3 ? 'sedan' : z < 0.5 ? 'pickup' : z < 0.7 ? 'van' : z < 0.8 ? 'truck' : 'bus'; })(); const shift = r() * 2; rowLen = Math.max(rowLen, addObs(k, lane, d + shift) + shift); }
+      if (q2 < pBlock) {
+        const k = pv(), shift = r() * 2; rowLen = Math.max(rowLen, addObs(k, lane, d + shift) + shift);
+        /* convoi : un deuxième véhicule juste derrière */
+        if (r() < 0.35 + 0.3 * diff) { const k2 = pv2(), sh2 = shift + SIZE[k][0] + 1.2 + r() * 1.5; rowLen = Math.max(rowLen, addObs(k2, lane, d + sh2) + sh2); }
+      }
       else if (q2 < Math.min(0.99, pBlock + 0.25)) { addObs(r() < 0.5 ? 'barrier' : 'beam', lane, d + r() * 2); }
     }
-    rows++; prevSafe = newSafe; safe = newSafe; prevEnd = d + rowLen;
+    rows++; safes.push({ g0, lane: newSafe, from: prevSafe, end: d + rowLen }); prevSafe = newSafe; safe = newSafe; prevEnd = d + rowLen;
     // bonus
     if (d - lastPick > 190 && rows > 3) {
       const t = r(), type = t < 0.28 ? 'aimant' : t < 0.52 ? 'bouclier' : t < 0.7 ? 'envol' : t < 0.88 ? 'x2' : 'coeur';
@@ -75,8 +99,10 @@ export function genLevel(li, si) {
   }
   // fin de parcours : dernière ligne de pièces vers l’arche
   const g0 = prevEnd + 2; for (let dd = g0; dd < L.len - 4; dd += 3) { const u = (dd - g0) / Math.max(1, L.len - 4 - g0); coin(dd, LX[safe] + (0 - LX[safe]) * sm(0.1, 0.5, u), 1.0); }
-  coins.sort((a, b) => a.d - b.d);
-  return { obs, coins, picks, len: L.len, theme: L.theme, v, speed: si };
+  /* beaucoup moins de pièces : on garde 1 pièce sur 5 (1 sur 2 dans le tutoriel), sauf sous les dangers */
+  const all = coins.filter(c => !haz.some(h => c.d > h.d0 - 2 && c.d < h.d1 + 2 && Math.abs(c.x - h.x) < 2.2)).sort((a, b) => a.d - b.d), kept = []; let ti = 0, k5 = 0;
+  for (const c of all) { if (c.d <= 46) { if ((ti++ & 1) === 0) kept.push(c); } else if ((k5++ % 5) === 2) kept.push(c); }
+  return { safes, obs, dyn: obs.filter(o => o.dyn), coins: kept, picks, len: L.len, theme: L.theme, v, speed: si };
 }
 
 /* ---------- moteur ---------- */
@@ -132,7 +158,7 @@ export function createEngine(canvas, cb = {}) {
 
   /* ---------- modes ---------- */
   function clearRun() {
-    live.forEach(o => obsGroup.remove(o.m)); live.clear(); pickGroup.clear();
+    live.forEach(o => { obsGroup.remove(o.m); if (o.sh) obsGroup.remove(o.sh); }); live.clear(); pickGroup.clear();
     if (coinMesh) { scene.remove(coinMesh); coinMesh.dispose(); coinMesh = null; }
     if (finishGroup) { scene.remove(finishGroup); finishGroup = null; } if (confetti) { scene.remove(confetti); confetti = null; }
     lev = null; coinStart = 0;
@@ -190,10 +216,19 @@ export function createEngine(canvas, cb = {}) {
       if (o.d1 < P.d - 1 || o.d0 > P.d + 1.5) continue;
       if (!(P.d + 0.3 > o.d0 && P.d - 0.3 < o.d1)) continue;
       if (Math.abs(P.x - o.x) > o.hw - 0.05) continue;
+      if (o.dyn === 'drop' && !o.landed) continue;
       if (o.type === 'barrier') { if (py < 0.7) { hurt(); } }
       else if (o.type === 'beam') { if (!sl) hurt(); }
       else if (o.type === 'block') { if (py < o.top - 0.25) hurt(); }
       else if (o.type === 'ramp') { if (P.d > o.d0 + RAMP && py < 2.7) hurt(); }
+    }
+  }
+  const SHG = new THREE.CircleGeometry(1.1, 24);
+  function syncDyn() {
+    for (const [o, v] of live) {
+      if (!o.dyn) continue; const dist = o.d0 - P.d;
+      if (o.dyn === 'pull') { v.m.position.x = o.x; v.m.rotation.y = o.on && o.p < 1 ? (Math.sign(o.xLane) || 1) * 0.45 * Math.sin(Math.PI * o.p) : 0; }
+      else { v.m.visible = o.on; v.m.position.y = o.fy; v.sh.visible = !o.landed && dist < Math.max(P.vNow || 20, 12) * 2.0; v.sh.material.opacity = 0.25 + 0.4 * (o.on ? o.p : 0); v.sh.scale.setScalar(0.8 + 0.4 * (o.on ? o.p : 0)); }
     }
   }
   function spawnLive() {
@@ -202,8 +237,10 @@ export function createEngine(canvas, cb = {}) {
       if (vis && !has) {
         const m = proto(o.kind, o.variant).clone();
         const z = o.kind === 'busramp' ? -o.d0 - (11.5 / 2 + RAMP) : -(o.d0 + o.len / 2); m.position.set(o.x, 0, z);
-        obsGroup.add(m); live.set(o, { m });
-      } else if (!vis && has) { obsGroup.remove(has.m); live.delete(o); }
+        obsGroup.add(m); const ent = { m };
+        if (o.dyn === 'drop') { m.visible = o.on; m.position.y = o.fy; const sh = new THREE.Mesh(SHG, new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.4, depthWrite: false })); sh.rotation.x = -Math.PI / 2; sh.position.set(o.x, 0.04, z); sh.visible = false; obsGroup.add(sh); ent.sh = sh; }
+        live.set(o, ent);
+      } else if (!vis && has) { obsGroup.remove(has.m); if (has.sh) obsGroup.remove(has.sh); live.delete(o); }
     }
   }
 
@@ -252,6 +289,13 @@ export function createEngine(canvas, cb = {}) {
     /* changement de voie : ressort amorti (départ et arrivée progressifs, pas de saccade) */
     P.vx += (260 * (LX[P.lane] - P.x) - 32 * P.vx) * dt; P.x = clamp(P.x + P.vx * dt, -LANE - 0.15, LANE + 0.15);
     P.land = Math.max(0, P.land - dt / 0.3); if (!P.grounded) P.airT += dt;
+    for (const o of lev.dyn) {
+      const dist = o.d0 - P.d; if (dist > 400 || dist < -30) continue;
+      if (!o.on && dist < Math.max(P.vNow, 12) * 0.95) o.on = true;
+      if (!o.on) continue;
+      if (o.dyn === 'pull') { if (o.p < 1) { o.p = Math.min(1, o.p + dt / 0.75); o.x = o.xPark + (o.xLane - o.xPark) * sm(0, 1, o.p); } }
+      else if (!o.landed) { o.p = Math.min(1, o.p + dt / 0.5); o.fy = 9 * (1 - o.p * o.p); if (o.p >= 1) { o.landed = true; o.fy = 0; emit('thud'); P.camShake = Math.max(P.camShake, 0.15); } }
+    }
     const fl = floorAt(P.x, P.d);
     if (P.fly > 0 || (P.fly <= 0 && P.flyPrev)) { /* vol */ }
     if (P.fly > 0) { P.y += (4.6 - P.y) * Math.min(1, dt * 3); P.vy = 0; P.grounded = false; }
@@ -338,9 +382,9 @@ export function createEngine(canvas, cb = {}) {
     const win = P.state === 'win' ? sm(0.4, 2, P.endT) : 0;
     const camZ = -P.d + 6.4 - win * 9.6, camX = cx + 0.55 - win * 1.5, camY = 3.0 + P.y * 0.7 + shake - win * 1.4;
     cam.position.set(camX, camY, camZ); cam.lookAt(win > 0 ? P.x : cx * 0.95, 1.4 + P.y * 0.5 - win * 0.2, win > 0 ? -P.d : -P.d - 8);
-    cam.fov = 58 + 4 * (P.vNow ? P.vNow / 14 : 0) + (P.fly > 0 ? 3 : 0); cam.updateProjectionMatrix();
+    cam.fov = 58 + Math.min(10, 4 * (P.vNow ? P.vNow / 14 : 0)) + (P.fly > 0 ? 3 : 0); cam.updateProjectionMatrix();
     sun.position.set(P.x + THEMES[S.themeIdx].sun[2][0], THEMES[S.themeIdx].sun[2][1], -P.d + THEMES[S.themeIdx].sun[2][2]); sun.target.position.set(P.x, 0, -P.d - 2); sun.target.updateMatrixWorld();
-    drawCoins();
+    syncDyn(); drawCoins();
   }
   function poseMenu(dt) {
     S.mz -= dt * 8; S.lastZ = S.mz; P.phi += dt * 12;

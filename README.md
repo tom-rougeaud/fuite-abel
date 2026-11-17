@@ -5,7 +5,7 @@ Jeu de course en 3D pour les jeunes enfants (navigateur et mobile). On court, on
 **Jouer :** https://tom-rougeaud.github.io/fuite-abel/
 
 ## Le jeu
-- 15 niveaux (5 décors : ville, plage, neige, désert, forêt, chacun de jour, au soir et de nuit), de plus en plus longs et difficiles. Ils se débloquent avec des pièces dans la boutique. 3 vitesses de défilement (escargot, lapin, guépard), 3 étoiles par niveau.
+- 15 niveaux (5 décors : ville, plage, neige, désert, forêt, chacun de jour, au soir et de nuit), de plus en plus longs et difficiles (défilement très rapide, files de voitures, voitures qui sortent de leur place, objets qui tombent avec une ombre d’avertissement, pièces rares). Ils se débloquent avec des pièces dans la boutique. 3 vitesses de défilement (escargot, lapin, guépard), 3 étoiles par niveau.
 - Obstacles à l’américaine : voitures, camionnettes, pick-up, bus, semi-remorques, barrières, poutres, bus avec rampe.
 - Les pièces indiquent le chemin le plus sûr. 3 cœurs. Interface en icônes avec un court libellé courbé sur les boutons.
 - Bonus : aimant, bouclier, envol, pièces ×2, cœur. Poursuivant : garde, chien ou robot (tout près, un choc coûte 2 cœurs). Mouvements animés : élan et réception du saut, tacle, virages.

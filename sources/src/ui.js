@@ -45,10 +45,12 @@ function beep(f, d, type = 'sine', vol = 0.12, slide = 0, when = 0) {
     g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + d); o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + d + 0.02);
   } catch (e) { }
 }
+let lastCoin = 0;
 const SFX = {
-  coin() { beep(880, 0.08, 'triangle', 0.1); beep(1320, 0.12, 'triangle', 0.1, 0, 0.06); }, jump() { beep(300, 0.18, 'sine', 0.12, 260); }, slide() { beep(220, 0.22, 'sawtooth', 0.05, -120); }, move() { beep(500, 0.04, 'sine', 0.04); },
-  hit() { beep(140, 0.3, 'square', 0.14, -80); }, shield() { beep(600, 0.2, 'triangle', 0.12, 400); }, power() { [523, 659, 784].forEach((f, i) => beep(f, 0.14, 'triangle', 0.11, 0, i * 0.07)); },
-  win() { [523, 659, 784, 1046].forEach((f, i) => beep(f, 0.22, 'triangle', 0.13, 0, i * 0.12)); }, lose() { [392, 330, 262].forEach((f, i) => beep(f, 0.25, 'sine', 0.12, 0, i * 0.16)); }, go() { beep(660, 0.12, 'triangle', 0.1); }, click() { beep(700, 0.05, 'triangle', 0.08); }
+  coin() { const n = performance.now(); if (n - lastCoin < 140) return; lastCoin = n; beep(740, 0.05, 'sine', 0.022); },
+  jump() { beep(300, 0.18, 'sine', 0.06, 260); }, slide() { beep(220, 0.22, 'sawtooth', 0.025, -120); }, move() { beep(500, 0.04, 'sine', 0.015); },
+  hit() { beep(140, 0.3, 'square', 0.12, -80); }, thud() { beep(95, 0.14, 'square', 0.05, -30); }, shield() { beep(600, 0.2, 'triangle', 0.1, 400); }, power() { [523, 659, 784].forEach((f, i) => beep(f, 0.14, 'triangle', 0.09, 0, i * 0.07)); },
+  win() { [523, 659, 784, 1046].forEach((f, i) => beep(f, 0.22, 'triangle', 0.11, 0, i * 0.12)); }, lose() { [392, 330, 262].forEach((f, i) => beep(f, 0.25, 'sine', 0.1, 0, i * 0.16)); }, go() { beep(660, 0.12, 'triangle', 0.08); }, click() { beep(700, 0.05, 'triangle', 0.07); }
 };
 
 /* ---------- moteur ---------- */
