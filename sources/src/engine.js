@@ -1,3 +1,6 @@
+/* Projet : La fuite d’Abel  ·  Version : 1.5.0  ·  Date : 17/11/2026
+   Auteur : Tom Rougeaud  ·  Licence : CC BY-NC 4.0
+   Réalisé avec l’aide de l’IA : Claude Sonnet 5.5 (Anthropic) */
 import * as THREE from 'three';
 import { buildRunner, poseRunner, buildDog, poseDog, PRESET } from './char.js';
 import { proto } from './vehicles.js';
@@ -9,7 +12,8 @@ export const LANE = 3.2, LX = [-LANE, 0, LANE];
 /* vitesse de défilement (m/s) : seul le décor accélère, pas la cadence des jambes */
 export const SPEEDS = [32, 43, 55];
 /* 15 niveaux : 5 décors × (jour, soir, nuit). Plus on avance, plus c’est long, rapide et chargé. */
-export const LEVELS = Array.from({ length: 15 }, (_, i) => ({ theme: (i % 5) + 5 * Math.floor(i / 5), len: 1500 + 200 * i, diff: 0.4 + 0.05 * i, vmul: 1 + 0.01 * i, seed: 11 * (i + 1) }));
+/* 50 niveaux de 10 000 m : décor = 5 lieux × 3 ambiances (jour, soir, nuit), difficulté et vitesse croissantes */
+export const LEVELS = Array.from({ length: 50 }, (_, i) => ({ theme: (i % 5) + 5 * (Math.floor(i / 5) % 3), len: 10000, diff: 0.4 + 0.7 * i / 49, vmul: 1 + 0.003 * i, seed: 11 * (i + 1) }));
 export const POWERS = { aimant: { icon: 'magnet', bg: '#c0392b', dur: 9 }, bouclier: { icon: 'shield', bg: '#2f7fd0', dur: 14 }, envol: { icon: 'balloon', bg: '#d9578a', dur: 5.5 }, x2: { icon: 'x2', bg: '#7a4fb8', dur: 10 }, coeur: { icon: 'heart', bg: '#d1344a', dur: 0 } };
 const SIZE = { sedan: [4.8, 1.9, 1.7], pickup: [5.6, 2.05, 2.1], van: [5.2, 2.1, 2.45], truck: [17.6, 2.55, 4.0], bus: [11.5, 2.5, 3.0], busramp: [18.5, 2.5, 3.0], barrier: [0.7, 2.6, 0.9], beam: [0.6, 3.3, 2.0], crate: [1.8, 1.8, 1.5], barrel: [1.6, 1.6, 1.5] };
 const RAMP = 7;
@@ -20,7 +24,7 @@ const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 
 /* ---------- génération d’un niveau (déterministe) ---------- */
 export function genLevel(li, si) {
-  const L = LEVELS[li], v = SPEEDS[si] * L.vmul, r = mb(L.seed * 100 + si), obs = [], coins = [], picks = [], safes = [];
+  const L = LEVELS[li], v = SPEEDS[si] * L.vmul, r0 = mb(L.seed * 100 + si), obs = [], coins = [], picks = [], safes = []; let r = r0, nextSeg = 600; /* r : générateur du tronçon courant */
   const addObs = (kind, lane, d0, extra = {}) => {
     const [len, w, top] = SIZE[kind], type = kind === 'barrier' ? 'barrier' : kind === 'beam' ? 'beam' : kind === 'busramp' ? 'ramp' : 'block';
     obs.push(Object.assign({ kind, lane, x: LX[lane], d0, d1: d0 + len, len, hw: w / 2, top, type, variant: (r() * 6) | 0 }, extra));
@@ -32,20 +36,24 @@ export function genLevel(li, si) {
   for (let d = 10; d <= 46; d += 3) coin(d, 0, 1.0);
   let d = 54, safe = 1, prevEnd = 46, rows = 0, lastPick = 0, prevSafe = 1, combo = false, lastCombo = false;
   while (d < L.len - 40) {
+    /* tronçons de 500 m tirés dans un petit lot de graines : certains reviennent à l’identique (ou presque) ; chaque tronçon repart sur la voie centrale */
+    let boundary = false;
+    if (d >= nextSeg) { boundary = true; nextSeg += 500; r = mb(7000 + (L.seed % 9) * 16 + ((r0() * 8) | 0)); combo = false; lastCombo = false; rows = Math.max(rows, 4); }
     const diff = Math.min(1.1, L.diff * (0.55 + 0.45 * Math.min(1, rows / 8)) + 0.25 * Math.min(1, d / L.len));
     let kind;
     const q = r();
     if (rows === 0) kind = 'barrier'; else if (rows === 1) kind = 'beam';
     else if (q < 0.16 - 0.1 * diff) kind = 'free'; else if (q < 0.42) kind = 'barrier'; else if (q < 0.62) kind = 'beam'; else kind = rows >= 3 ? 'busramp' : 'barrier';
     if (combo) kind = r() < 0.5 ? 'barrier' : 'beam';
+    if (boundary) kind = 'free';
     const opts = [safe - 1, safe + 1].filter(l => l >= 0 && l <= 2);
-    const newSafe = rows < 2 ? 1 : (combo ? safe : r() < 0.5 ? opts[(r() * opts.length) | 0] : safe);
+    const newSafe = rows < 2 || boundary ? 1 : (combo ? safe : r() < 0.5 ? opts[(r() * opts.length) | 0] : safe);
     // pièces de la zone de dégagement : le chemin glisse vers la nouvelle voie
     /* danger de la zone : décidé avant, pour élargir l’écart si la voie à quitter est concernée */
     const hOuter = [0, 2].filter(l => l !== newSafe && l !== prevSafe), hLeaves = prevSafe !== newSafe && prevSafe !== 1;
     const hz = rows >= 2 && r() < 0.7 + 0.3 * diff ? { pull: r() < 0.5, early: hLeaves && r() < 0.7 } : null;
     const hvf = v * (1 + 0.25 * Math.min(1, d / L.len));
-    if (hz && hz.early && hz.pull) d += 0.5 * hvf;
+    if (hz && hz.early) d += 0.5 * hvf; /* voie à quitter : il faut laisser le temps de réagir */
     if (hz && !hz.early && !hOuter.length) hz.none = true;
     const g0 = prevEnd + 2, g1 = d - 3;
     for (let dd = g0; dd <= g1; dd += 3) { const u = g1 > g0 ? (dd - g0) / (g1 - g0) : 1; coin(dd, LX[prevSafe] + (LX[newSafe] - LX[prevSafe]) * sm(0.15, 0.85, u), 1.0); }
@@ -57,7 +65,7 @@ export function genLevel(li, si) {
         obs.push({ kind: k, lane: hl, x: sd * 5.7, xPark: sd * 5.7, xLane: LX[hl], d0: d0h, d1: d0h + len, len, hw: SIZE[k][1] / 2, top: SIZE[k][2], type: 'block', variant: (r() * 6) | 0, dyn: 'pull', p: 0, on: false });
         haz.push({ d0: d0h, d1: d0h + len, x: LX[hl] });
       } else {
-        const k = r() < 0.5 ? 'crate' : 'barrel', len = SIZE[k][0], d0h = g0 + 2 + (hz.early ? r() * 0.2 * span : r() * Math.max(0, span - 6));
+        const k = r() < 0.5 ? 'crate' : 'barrel', len = SIZE[k][0], d0h = hz.early ? prevEnd + 0.75 * hvf + r() * 0.2 * hvf : g0 + 2 + r() * Math.max(0, span - 6);
         obs.push({ kind: k, lane: hl, x: LX[hl], d0: d0h, d1: d0h + len, len, hw: SIZE[k][1] / 2, top: 1.5, type: 'block', variant: (r() * 3) | 0, dyn: 'drop', p: 0, on: false, landed: false, fy: 9 });
         haz.push({ d0: d0h, d1: d0h + len, x: LX[hl] });
       }

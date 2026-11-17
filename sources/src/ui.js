@@ -1,3 +1,6 @@
+/* Projet : La fuite d’Abel  ·  Version : 1.5.0  ·  Date : 17/11/2026
+   Auteur : Tom Rougeaud  ·  Licence : CC BY-NC 4.0
+   Réalisé avec l’aide de l’IA : Claude Sonnet 5.5 (Anthropic) */
 import { createEngine, LEVELS, SPEEDS, POWERS } from './engine.js';
 import { ic } from './icons.js';
 
@@ -152,11 +155,11 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && cur
 
 /* résultat : on voit toujours quoi faire ensuite (suite, rejouer, boutique) */
 function showResult(r) {
-  const gain = r.coins; save.coins += gain;
+  const gain = Math.round(r.coins * [1, 1.1, 1.25][r.speed || 0]); save.coins += gain; /* bonus de gain : +10 % au mode moyen, +25 % au mode difficile */
   if (r.win) { save.stars[r.level] = Math.max(save.stars[r.level], r.stars); }
   persist();
   const box = $('#scr-result .panel'), nxt = r.win && r.level + 1 < NL ? r.level + 1 : -1, nv = nxt >= 0 ? DATA.niveaux[nxt] : null;
-  box.innerHTML = `<h2 class="ttl">${r.win ? 'Bravo !' : 'Raté…'}</h2><div class="rstars">${r.win ? [0, 1, 2].map(k => `<span class="rs ${k < r.stars ? 'on' : ''}" style="animation-delay:${0.25 + k * 0.35}s">${ic(k < r.stars ? 'star' : 'starO')}</span>`).join('') : `<span class="sad">${ic('brokenheart')}</span>`}</div><div class="gain">${ic('coin')}<b>+${gain}</b></div><div class="sub">${ic('coin', 'inl')} ${save.coins} en tout</div><div class="stack"></div><div class="row"></div>`;
+  box.innerHTML = `<h2 class="ttl">${r.win ? 'Bravo !' : 'Raté…'}</h2><div class="rstars">${r.win ? [0, 1, 2].map(k => `<span class="rs ${k < r.stars ? 'on' : ''}" style="animation-delay:${0.25 + k * 0.35}s">${ic(k < r.stars ? 'star' : 'starO')}</span>`).join('') : `<span class="sad">${ic('brokenheart')}</span>`}</div><div class="gain">${ic('coin')}<b>+${gain}</b>${r.speed ? `<small> (+${r.speed === 1 ? 10 : 25} %)</small>` : ''}</div><div class="sub">${ic('coin', 'inl')} ${save.coins} en tout</div><div class="stack"></div><div class="row"></div>`;
   const st = box.querySelector('.stack'), row = box.querySelector('.row');
   const wide = (cls, html, fn) => { const b = document.createElement('button'); b.className = 'wide ' + cls; b.innerHTML = html; b.addEventListener('click', () => { SFX.click(); fn(); }); st.appendChild(b); return b; };
   if (r.win && nv) {

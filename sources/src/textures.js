@@ -1,3 +1,6 @@
+/* Projet : La fuite d’Abel  ·  Version : 1.5.0  ·  Date : 17/11/2026
+   Auteur : Tom Rougeaud  ·  Licence : CC BY-NC 4.0
+   Réalisé avec l’aide de l’IA : Claude Sonnet 5.5 (Anthropic) */
 import * as THREE from 'three';
 /* Textures procédurales (aucune image externe) : tissu, denim, peau, cheveux, cuir, pièce gravée. */
 function cv(w, h = w) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
