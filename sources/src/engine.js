@@ -7,7 +7,7 @@ import { badgeTexture } from './icons.js';
 
 export const LANE = 3.2, LX = [-LANE, 0, LANE];
 /* vitesse de défilement (m/s) : seul le décor accélère, pas la cadence des jambes */
-export const SPEEDS = [22, 30, 38];
+export const SPEEDS = [32, 43, 55];
 /* 15 niveaux : 5 décors × (jour, soir, nuit). Plus on avance, plus c’est long, rapide et chargé. */
 export const LEVELS = Array.from({ length: 15 }, (_, i) => ({ theme: (i % 5) + 5 * Math.floor(i / 5), len: 1500 + 200 * i, diff: 0.4 + 0.05 * i, vmul: 1 + 0.01 * i, seed: 11 * (i + 1) }));
 export const POWERS = { aimant: { icon: 'magnet', bg: '#c0392b', dur: 9 }, bouclier: { icon: 'shield', bg: '#2f7fd0', dur: 14 }, envol: { icon: 'balloon', bg: '#d9578a', dur: 5.5 }, x2: { icon: 'x2', bg: '#7a4fb8', dur: 10 }, coeur: { icon: 'heart', bg: '#d1344a', dur: 0 } };
@@ -43,7 +43,7 @@ export function genLevel(li, si) {
     // pièces de la zone de dégagement : le chemin glisse vers la nouvelle voie
     /* danger de la zone : décidé avant, pour élargir l’écart si la voie à quitter est concernée */
     const hOuter = [0, 2].filter(l => l !== newSafe && l !== prevSafe), hLeaves = prevSafe !== newSafe && prevSafe !== 1;
-    const hz = rows >= 3 && r() < 0.5 + 0.3 * diff ? { pull: r() < 0.5, early: hLeaves && r() < 0.7 } : null;
+    const hz = rows >= 2 && r() < 0.7 + 0.3 * diff ? { pull: r() < 0.5, early: hLeaves && r() < 0.7 } : null;
     const hvf = v * (1 + 0.25 * Math.min(1, d / L.len));
     if (hz && hz.early && hz.pull) d += 0.5 * hvf;
     if (hz && !hz.early && !hOuter.length) hz.none = true;
@@ -62,6 +62,12 @@ export function genLevel(li, si) {
         haz.push({ d0: d0h, d1: d0h + len, x: LX[hl] });
       }
     }
+    /* circulation de la zone : véhicules dans les voies que le trajet n’emprunte pas */
+    { const lo = Math.min(prevSafe, newSafe), hi = Math.max(prevSafe, newSafe), hzl = hz && !hz.none ? (hz.early ? prevSafe : -2) : -2;
+      for (let l = 0; l < 3; l++) { if (l >= lo && l <= hi) continue; if (g1 - g0 < 12 || r() > 0.55 + 0.25 * diff) continue;
+        const k = pv2(), len = SIZE[k][0], d0z = g0 + 1 + r() * Math.max(0, g1 - g0 - len - 2);
+        if (obs.some(o => o.lane === l && o.d1 > d0z - 1 && o.d0 < d0z + len + 1)) continue;
+        obs.push({ kind: k, lane: l, x: LX[l], d0: d0z, d1: d0z + len, len, hw: SIZE[k][1] / 2, top: SIZE[k][2], type: 'block', variant: (r() * 6) | 0 }); haz.push({ d0: d0z, d1: d0z + len, x: LX[l] }); } }
     let rowLen = 1;
     const sl = kind === 'free' ? 0 : addObs(kind, newSafe, d);
     if (kind === 'free') rowLen = 10; else rowLen = sl;
@@ -79,7 +85,9 @@ export function genLevel(li, si) {
       if (q2 < pBlock) {
         const k = pv(), shift = r() * 2; rowLen = Math.max(rowLen, addObs(k, lane, d + shift) + shift);
         /* convoi : un deuxième véhicule juste derrière */
-        if (r() < 0.35 + 0.3 * diff) { const k2 = pv2(), sh2 = shift + SIZE[k][0] + 1.2 + r() * 1.5; rowLen = Math.max(rowLen, addObs(k2, lane, d + sh2) + sh2); }
+        if (r() < 0.55 + 0.3 * diff) { const k2 = pv2(), sh2 = shift + SIZE[k][0] + 1.2 + r() * 1.5; rowLen = Math.max(rowLen, addObs(k2, lane, d + sh2) + sh2);
+          /* troisième véhicule du convoi */
+          if (r() < 0.35 * diff + 0.15) { const k3 = pv2(), sh3 = sh2 + SIZE[k2][0] + 1.2 + r() * 1.5; rowLen = Math.max(rowLen, addObs(k3, lane, d + sh3) + sh3); } }
       }
       else if (q2 < Math.min(0.99, pBlock + 0.25)) { addObs(r() < 0.5 ? 'barrier' : 'beam', lane, d + r() * 2); }
     }
@@ -95,7 +103,7 @@ export function genLevel(li, si) {
     /* série : un second obstacle suit de près sur la même voie (saute, puis glisse) */
     lastCombo = combo; combo = rows > 3 && !lastCombo && (kind === 'barrier' || kind === 'beam') && r() < 0.18 + 0.4 * diff;
     const vf = v * (1 + 0.25 * Math.min(1, d / L.len)); /* vitesse réelle à cet endroit : l’écart reste faisable (un saut dure 0,77 s) */
-    d = prevEnd + (combo ? vf * 0.8 + 4 : Math.max(9, vf * (0.9 + 0.1 * (1 - Math.min(1, diff))) + r() * 0.14 * vf));
+    d = prevEnd + (combo ? vf * 0.8 + 4 : Math.max(9, vf * (0.84 + 0.08 * (1 - Math.min(1, diff))) + r() * 0.1 * vf));
   }
   // fin de parcours : dernière ligne de pièces vers l’arche
   const g0 = prevEnd + 2; for (let dd = g0; dd < L.len - 4; dd += 3) { const u = (dd - g0) / Math.max(1, L.len - 4 - g0); coin(dd, LX[safe] + (0 - LX[safe]) * sm(0.1, 0.5, u), 1.0); }

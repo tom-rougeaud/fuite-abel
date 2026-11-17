@@ -11,6 +11,7 @@ function gearPath() {
   return 'M' + pts.map(([rr, a]) => (12 + rr * Math.cos(a)).toFixed(2) + ' ' + (12 + rr * Math.sin(a)).toFixed(2)).join('L') + 'Z';
 }
 const I = {
+  brokenheart: `<g transform="translate(-0.9 0.5) rotate(-7 12 14)"><path ${F} d="M12 7A4.6 4.6 0 0 0 4 10C4 15.8 12 21 12 21L11 17L13 13.2L10.6 11Z"/></g><g transform="translate(0.9 0.5) rotate(7 12 14)"><path ${F} d="M12 7A4.6 4.6 0 0 1 20 10C20 15.8 12 21 12 21L11 17L13 13.2L10.6 11Z"/></g>`,
   heart: `<path ${F} d="M12 21s-8-5.2-8-11a4.6 4.6 0 0 1 8-3 4.6 4.6 0 0 1 8 3c0 5.8-8 11-8 11z"/>`,
   heartO: `<path ${S} d="M12 21s-8-5.2-8-11a4.6 4.6 0 0 1 8-3 4.6 4.6 0 0 1 8 3c0 5.8-8 11-8 11z"/>`,
   coin: `<circle cx="12" cy="12" r="9" fill="#f2c14e" stroke="#b9801b" stroke-width="2"/><circle cx="12" cy="12" r="5.4" fill="none" stroke="#b9801b" stroke-width="1.6"/><path d="M12 9v6M10.4 10.4h2.3a1.2 1.2 0 0 1 0 2.4h-1.4a1.2 1.2 0 0 0 0 2.4h2.3" stroke="#b9801b" stroke-width="1.3" fill="none" stroke-linecap="round"/>`,
