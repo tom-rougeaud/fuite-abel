@@ -1,4 +1,4 @@
-/* Projet : La fuite d’Abel  ·  Version : 1.9.0  ·  Date : 17/11/2026
+/* Projet : La fuite d’Abel  ·  Version : 1.10.0  ·  Date : 18/11/2026
    Auteur : Tom Rougeaud  ·  Licence : CC BY-NC 4.0
    Réalisé avec l’aide de l’IA : Claude Sonnet 5.5 (Anthropic) */
 import * as THREE from 'three';
@@ -40,19 +40,19 @@ export function genLevel(li, si) {
     /* tronçons de 500 m tirés dans un petit lot de graines : certains reviennent à l’identique (ou presque) ; chaque tronçon repart sur la voie centrale */
     let boundary = false;
     if (d >= nextSeg) { boundary = true; nextSeg += 500; r = mb(7000 + (L.seed % 9) * 16 + ((r0() * 8) | 0)); combo = false; lastCombo = false; rows = Math.max(rows, 4); }
-    const diff = Math.min(1.1, L.diff * (0.55 + 0.45 * Math.min(1, rows / 8)) + 0.25 * Math.min(1, d / L.len));
+    const diff = Math.min(1.3, L.diff * (0.55 + 0.45 * Math.min(1, rows / 8)) + 0.25 * Math.min(1, d / L.len) + 0.1 * si); /* + 0.1 par cran de vitesse */
     let kind;
     const q = r();
     if (rows === 0) kind = 'barrier'; else if (rows === 1) kind = 'beam';
-    else if (q < 0.06 - 0.04 * diff) kind = 'free'; else if (q < 0.46) kind = 'barrier'; else if (q < 0.64) kind = 'beam'; else kind = rows >= 3 ? 'busramp' : 'barrier';
+    else if (q < 0.46) kind = 'barrier'; else if (q < 0.64) kind = 'beam'; else kind = rows >= 3 ? 'busramp' : 'barrier';
     if (combo) kind = r() < 0.5 ? 'barrier' : 'beam';
-    if (boundary) kind = 'free';
+    if (boundary) kind = 'barrier'; /* la jonction de tronçon n’est plus une pause */
     /* slalom : 3 à 5 rangées rapprochées qui obligent à changer de voie à chaque fois (toutes les autres voies sont barrées) */
     if (!boundary && slal === 0 && rows > 4 && r() < 0.1 + 0.12 * diff) slal = 3 + ((r() * 3) | 0);
     const inSl = slal > 0 && !boundary; if (inSl) { kind = 'free'; combo = false; }
-    const pullNow = rows >= 3 && !inSl && !boundary && !combo && r() < 0.6 + 0.3 * diff; /* voiture qui sort dans TA voie */
+    const pullNow = rows >= 3 && !inSl && !boundary && !combo && r() < 0.55 + 0.25 * diff; /* voiture qui sort dans TA voie */
     /* rangée « saut + décalage » : on saute (ou glisse), puis un véhicule surgit dans la même voie : il faut passer sur la voisine presque en même temps */
-    const hopNow = rows > 5 && !inSl && !boundary && !combo && !pullNow && r() < 0.18 + 0.15 * diff; if (hopNow) kind = r() < 0.5 ? 'barrier' : 'beam';
+    const hopNow = rows > 3 && !inSl && !boundary && !combo && !pullNow && r() < 0.55 + 0.3 * diff; /* atterrissage piégé : saut puis esquive latérale */ if (hopNow) kind = r() < 0.5 ? 'barrier' : 'beam';
     const opts = [safe - 1, safe + 1].filter(l => l >= 0 && l <= 2);
     const newSafe = rows < 2 || boundary ? 1 : (combo ? safe : inSl || pullNow || r() < 0.88 ? opts[(r() * opts.length) | 0] : safe); /* on change presque toujours de voie */
     const hopOpts = [newSafe - 1, newSafe + 1].filter(l => l >= 0 && l <= 2), hopT = hopNow ? hopOpts[(r() * hopOpts.length) | 0] : -1; /* voie d’esquive */
@@ -60,9 +60,9 @@ export function genLevel(li, si) {
     // pièces de la zone de dégagement : le chemin glisse vers la nouvelle voie
     /* danger de la zone : décidé avant, pour élargir l’écart si la voie à quitter est concernée */
     const hOuter = [0, 2].filter(l => l !== newSafe && l !== prevSafe), hLeaves = prevSafe !== newSafe && prevSafe !== 1;
-    const hz = hopNow ? null : pullNow ? { pull: true, early: true } : (rows >= 2 && !inSl && r() < 0.5 + 0.2 * diff ? { pull: false, early: hLeaves && r() < 0.7 } : null);
+    const hz = hopNow ? null : pullNow ? { pull: true, early: true } : (rows >= 2 && !inSl && r() < 0.85 ? { pull: false, early: prevSafe !== newSafe && r() < 0.8 } : null);
     const hvf = v * (1 + 0.25 * Math.min(1, d / L.len));
-    if (hz && hz.early) d += 0.75 * hvf; /* voie à quitter : il faut laisser le temps de réagir */
+    if (hz && hz.early) d += 0.75 * hvf; /* voie à quitter : temps de réagir (caisse : l’ombre prévient plus tôt) */
     if (hz && !hz.early && !hOuter.length) hz.none = true;
     const g0 = prevEnd + 2, g1 = d - 3;
     for (let dd = g0; dd <= g1; dd += 3) { const u = g1 > g0 ? (dd - g0) / (g1 - g0) : 1; coin(dd, LX[prevSafe] + (LX[newSafe] - LX[prevSafe]) * sm(0.15, 0.85, u), 1.0); }
@@ -75,8 +75,8 @@ export function genLevel(li, si) {
         obs.push({ kind: k, lane: hl, x: sd * 5.7, xPark: sd * 5.7, xLane: LX[hl], d0: d0h, d1: d0h + len, len, hw: SIZE[k][1] / 2, top: SIZE[k][2], type: 'block', variant: (r() * 6) | 0, dyn: 'pull', p: 0, on: false });
         haz.push({ d0: d0h, d1: d0h + len, x: LX[hl] }); if (hz.early) lateStart = d0h;
       } else {
-        const k = r() < 0.5 ? 'crate' : 'barrel', len = SIZE[k][0], d0h = hz.early ? prevEnd + hvf + r() * 0.15 * hvf : g0 + 2 + r() * Math.max(0, span - 6);
-        obs.push({ kind: k, lane: hl, x: LX[hl], d0: d0h, d1: d0h + len, len, hw: SIZE[k][1] / 2, top: 1.5, type: 'block', variant: (r() * 3) | 0, dyn: 'drop', p: 0, on: false, landed: false, fy: 9 });
+        const k = r() < 0.5 ? 'crate' : 'barrel', len = SIZE[k][0], d0h = hz.early ? prevEnd + hvf + r() * 0.1 * hvf : g0 + 2 + r() * Math.max(0, span - 6);
+        obs.push({ kind: k, lane: hl, x: LX[hl], d0: d0h, d1: d0h + len, len, hw: SIZE[k][1] / 2, top: 1.1, type: 'block', variant: (r() * 3) | 0, dyn: 'drop', p: 0, on: false, landed: false, fy: 9 });
         haz.push({ d0: d0h, d1: d0h + len, x: LX[hl] });
       }
     }
@@ -85,10 +85,10 @@ export function genLevel(li, si) {
        - si l’on change de voie : la nouvelle est barrée au début, l’ancienne à la fin, avec un créneau de ≈ 0,4 s au milieu pour passer. */
     const tile = (lane, a0, b0) => { /* aligne des véhicules (petits écarts) entre a0 et b0 */
       let x = a0 + r() * 0.8;
-      while (true) { const k = pv2(), len = SIZE[k][0]; if (x + len > b0 + 0.5) break; addObs(k, lane, x); haz.push({ d0: x, d1: x + len, x: LX[lane] }); x += len + 1.4 + r() * 2.2; }
+      while (true) { const k = pv2(), len = SIZE[k][0]; if (x + len > b0 + 0.5) break; addObs(k, lane, x); haz.push({ d0: x, d1: x + len, x: LX[lane] }); x += len + 0.9 + r() * 1.0; }
     };
     let swPt = g0; /* point où le trajet change de voie (robot de test) */
-    if (g1 - g0 >= 6 && !boundary) {
+    if (g1 - g0 >= 6) {
       const lo = Math.min(prevSafe, newSafe), hi = Math.max(prevSafe, newSafe);
       for (let l = 0; l < 3; l++) { if (l >= lo && l <= hi) continue; tile(l, g0, g1); }
       if (prevSafe === newSafe) { for (let l = 0; l < 3; l++) if (l !== newSafe && (l < lo || l > hi)) { /* déjà rempli ci-dessus */ } }
@@ -110,7 +110,7 @@ export function genLevel(li, si) {
     // autres voies
     for (let lane = 0; lane < 3; lane++) {
       if (lane === newSafe) continue;
-      const pBlock = inSl ? 1 : kind === 'free' ? 0.97 : 0.995; /* presque toujours une seule voie praticable */
+      const pBlock = 1; /* presque toujours une seule voie praticable */
       if (rows < 2) continue;
       if (lane === hopT) { const kk = 'van'; rowLen = Math.max(rowLen, addObs(kk, lane, d) ); continue; }
       const q2 = r();
@@ -129,7 +129,7 @@ export function genLevel(li, si) {
     } else safes.push({ g0: swPt, lane: newSafe, from: prevSafe, end: d + rowLen });
     rows++; prevSafe = endLane; safe = endLane; prevEnd = d + rowLen;
     // bonus
-    if (d - lastPick > 330 && rows > 3) { /* bonus plus rares ; cœur et ballons très rares */
+    if (d - lastPick > 330 + 220 * si && rows > 3) { /* bonus plus rares ; cœur et ballons très rares */
       const t = r(), type = t < 0.16 ? 'aimant' : t < 0.30 ? 'bouclier' : t < 0.35 ? 'envol' : t < 0.47 ? 'x2' : t < 0.51 ? 'coeur' : t < 0.63 ? 'ralenti' : t < 0.77 ? 'bottes' : t < 0.89 ? 'repousse' : 'pluie';
       const pd = prevEnd + 5;
       picks.push({ d: pd, x: LX[endLane], type, got: false });
@@ -140,7 +140,7 @@ export function genLevel(li, si) {
     lastCombo = combo; combo = rows > 3 && !lastCombo && !hopNow && (kind === 'barrier' || kind === 'beam') && r() < 0.18 + 0.4 * diff;
     const vf = v * (1 + 0.25 * Math.min(1, d / L.len)); /* vitesse réelle à cet endroit : l’écart reste faisable (un saut dure 0,77 s) */
     if (inSl) slal--;
-    d = prevEnd + (inSl ? vf * 0.62 + 3 : combo ? vf * 0.8 + 4 : Math.max(9, vf * (0.78 + 0.06 * (1 - Math.min(1, diff))) + r() * 0.08 * vf));
+    d = prevEnd + (inSl ? vf * 0.62 + 3 : combo ? vf * 0.8 + 4 : Math.max(9, vf * (0.6 + 0.06 * (1 - Math.min(1, diff))) + r() * 0.06 * vf));
   }
   // fin de parcours : dernière ligne de pièces vers l’arche
   const g0 = prevEnd + 2; for (let dd = g0; dd < L.len - 4; dd += 3) { const u = (dd - g0) / Math.max(1, L.len - 4 - g0); coin(dd, LX[safe] + (0 - LX[safe]) * sm(0.1, 0.5, u), 1.0); }
@@ -162,7 +162,7 @@ export function createEngine(canvas, cb = {}) {
   envMap(renderer).then(e => { scene.environment = e; }).catch(() => {});
 
   const S = { mode: 'menu', themeIdx: -1, scen: null, look: Object.assign({}, PRESET.abel), chaserType: 'garde', quality: 'auto', q: 2, w: 1, h: 1, t: 0, paused: false, fpsAcc: 0, fpsN: 0, lowCount: 0 };
-  const P = { d: 0, x: 0, y: 0, vy: 0, lane: 1, grounded: true, coyote: 0, jumpBuf: 0, slide: 0, inv: 0, hitT: 9, hearts: 3, coins: 0, phi: 0, fly: 0, shield: 0, magnet: 0, x2: 0, slow: 0, boots: 0, rain: 0, lost: 0, tired: 0, speedMul: 1, state: 'ready', endT: 0, camShake: 0, flash: 0 };
+  const P = { d: 0, x: 0, y: 0, vy: 0, lane: 1, grounded: true, coyote: 0, jumpBuf: 0, slide: 0, inv: 0, hitT: 9, hearts: 3, maxH: 3, coins: 0, phi: 0, fly: 0, shield: 0, magnet: 0, x2: 0, slow: 0, boots: 0, rain: 0, lost: 0, tired: 0, speedMul: 1, state: 'ready', endT: 0, camShake: 0, flash: 0 };
   const C = { gap: 12, x: 0, phi: 0, nextVisit: 20, vphase: 0, vt: 0, near: 0 };
   let runner = null, chaser = null, lev = null, obsGroup = new THREE.Group(), coinMesh = null, pickGroup = new THREE.Group(), finishGroup = null, confetti = null, shieldMesh = null, platform = null;
   scene.add(obsGroup, pickGroup);
@@ -220,7 +220,7 @@ export function createEngine(canvas, cb = {}) {
     clearRun(); S.mode = 'play'; S.paused = false; platform.visible = false;
     lev = genLevel(li, si); lev.li = li; lev.totalCoins = lev.coins.length;
     S.lastZ = 0; S.themeIdx === lev.theme && S.scen && (S.scen.dispose(), S.scen = null, S.themeIdx = -1); setTheme(lev.theme);
-    Object.assign(P, { d: 0, x: 0, y: 0, vy: 0, lane: 1, grounded: true, coyote: 0, jumpBuf: 0, slide: 0, inv: 0, hitT: 9, hearts: 3, coins: 0, phi: 0, fly: 0, shield: 0, magnet: 0, x2: 0, slow: 0, boots: 0, rain: 0, lost: 0, tired: 0, speedMul: 1, state: 'run', endT: 0, camShake: 0, flash: 0, vx: 0, airT: 0, jumped: false, land: 0, sk: 0, jk: 0, ended: false });
+    Object.assign(P, { d: 0, x: 0, y: 0, vy: 0, lane: 1, grounded: true, coyote: 0, jumpBuf: 0, slide: 0, inv: 0, hitT: 9, hearts: [3, 2, 1][si], maxH: [3, 2, 1][si], coins: 0, phi: 0, fly: 0, shield: 0, magnet: 0, x2: 0, slow: 0, boots: 0, rain: 0, lost: 0, tired: 0, speedMul: 1, state: 'run', endT: 0, camShake: 0, flash: 0, vx: 0, airT: 0, jumped: false, land: 0, sk: 0, jk: 0, ended: false });
     Object.assign(C, { gap: 14, x: 1.2, phi: 0, nextVisit: 8 + Math.random() * 4, vphase: 0, vt: 0, near: 0 });
     const cm = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.34, 0.34, 0.07, 28), coinMaterials(), 220); cm.frustumCulled = false; cm.count = 0; cm.castShadow = false; scene.add(cm); coinMesh = cm;
     // arche d’arrivée
@@ -369,7 +369,7 @@ export function createEngine(canvas, cb = {}) {
     for (const p of lev.picks) {
       if (p.got) continue; if (Math.abs(p.d - P.d) < 1.3 && Math.abs(p.x - P.x) < 1.5 && Math.abs(1.5 - pc) < 1.6 + (P.y > 0.5 ? 0.8 : 0)) {
         p.got = true; p.sp.visible = false; emit('power');
-        if (p.type === 'aimant') P.magnet = POWERS.aimant.dur; else if (p.type === 'bouclier') P.shield = POWERS.bouclier.dur; else if (p.type === 'envol') { P.fly = POWERS.envol.dur; P.inv = Math.max(P.inv, POWERS.envol.dur + 0.6); } else if (p.type === 'x2') P.x2 = POWERS.x2.dur; else if (p.type === 'ralenti') P.slow = POWERS.ralenti.dur; else if (p.type === 'bottes') P.boots = POWERS.bottes.dur; else if (p.type === 'pluie') P.rain = POWERS.pluie.dur; else if (p.type === 'repousse') { C.gap += 14; C.vphase = 0; C.nextVisit = 16; C.near = 0; } else if (p.type === 'coeur') { if (P.hearts < 3) P.hearts++; else P.coins += 5; }
+        if (p.type === 'aimant') P.magnet = POWERS.aimant.dur; else if (p.type === 'bouclier') P.shield = POWERS.bouclier.dur; else if (p.type === 'envol') { P.fly = POWERS.envol.dur; P.inv = Math.max(P.inv, POWERS.envol.dur + 0.6); } else if (p.type === 'x2') P.x2 = POWERS.x2.dur; else if (p.type === 'ralenti') P.slow = POWERS.ralenti.dur; else if (p.type === 'bottes') P.boots = POWERS.bottes.dur; else if (p.type === 'pluie') P.rain = POWERS.pluie.dur; else if (p.type === 'repousse') { C.gap += 14; C.vphase = 0; C.nextVisit = 16; C.near = 0; } else if (p.type === 'coeur') { if (P.hearts < P.maxH) P.hearts++; else P.coins += 5; }
       }
     }
     if (P.shield > 0 && P.state === 'run') P.shield -= dt;
@@ -387,11 +387,11 @@ export function createEngine(canvas, cb = {}) {
   }
   function sendHud() {
     if (!cb.onHud) return;
-    cb.onHud({ hearts: P.hearts, coins: P.coins, prog: clamp(P.d / lev.len, 0, 1), powers: [['aimant', P.magnet, POWERS.aimant.dur], ['bouclier', P.shield, POWERS.bouclier.dur], ['envol', P.fly, POWERS.envol.dur], ['x2', P.x2, POWERS.x2.dur], ['ralenti', P.slow, POWERS.ralenti.dur], ['bottes', P.boots, POWERS.bottes.dur], ['pluie', P.rain, POWERS.pluie.dur]].filter(a => a[1] > 0).map(a => ({ id: a[0], f: a[1] / a[2] })), chaser: C.gap < 7 });
+    cb.onHud({ hearts: P.hearts, maxH: P.maxH, coins: P.coins, prog: clamp(P.d / lev.len, 0, 1), powers: [['aimant', P.magnet, POWERS.aimant.dur], ['bouclier', P.shield, POWERS.bouclier.dur], ['envol', P.fly, POWERS.envol.dur], ['x2', P.x2, POWERS.x2.dur], ['ralenti', P.slow, POWERS.ralenti.dur], ['bottes', P.boots, POWERS.bottes.dur], ['pluie', P.rain, POWERS.pluie.dur]].filter(a => a[1] > 0).map(a => ({ id: a[0], f: a[1] / a[2] })), chaser: C.gap < 7 });
   }
   function finishRun(win) {
     const total = lev.totalCoins, ratio = total ? P.coins / total : 0;
-    const stars = win ? 1 + (ratio >= 0.6 ? 1 : 0) + (P.hearts >= 3 ? 1 : 0) : 0;
+    const stars = win ? 1 + (ratio >= 0.6 ? 1 : 0) + (P.hearts >= P.maxH ? 1 : 0) : 0;
     if (cb.onEnd) cb.onEnd({ win, stars, coins: P.coins, total, hearts: P.hearts, level: lev.li, speed: lev.speed });
   }
   function makeConfetti() {

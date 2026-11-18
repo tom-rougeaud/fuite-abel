@@ -1,4 +1,4 @@
-/* Projet : La fuite d’Abel  ·  Version : 1.9.0  ·  Date : 17/11/2026
+/* Projet : La fuite d’Abel  ·  Version : 1.10.0  ·  Date : 18/11/2026
    Auteur : Tom Rougeaud  ·  Licence : CC BY-NC 4.0
    Réalisé avec l’aide de l’IA : Claude Sonnet 5.5 (Anthropic) */
 import { createEngine, LEVELS, SPEEDS, POWERS } from './engine.js';
@@ -137,7 +137,7 @@ function startGame(li, si) { lastRun = { li, si }; show('hud'); $('#hudcoins').i
 let hudPrev = '';
 function updateHud(h) {
   const k = JSON.stringify(h); if (k === hudPrev) return; hudPrev = k;
-  $('#hearts').innerHTML = [0, 1, 2].map(i => `<span class="${i < h.hearts ? '' : 'off'}">${ic(i < h.hearts ? 'heart' : 'heartO')}</span>`).join('');
+  $('#hearts').innerHTML = Array.from({ length: h.maxH || 3 }, (_, i) => i).map(i => `<span class="${i < h.hearts ? '' : 'off'}">${ic(i < h.hearts ? 'heart' : 'heartO')}</span>`).join('');
   $('#hudcoins').innerHTML = `${ic('coin')}<b>${h.coins}</b>`;
   $('#bar i').style.width = (h.prog * 100).toFixed(1) + '%'; $('#bar u').style.left = (h.prog * 100).toFixed(1) + '%';
   $('#chips').innerHTML = h.powers.map(p => `<span class="chip" style="background:${POWERS[p.id].bg};--f:${(p.f * 100).toFixed(0)}%">${ic(POWERS[p.id].icon)}<em></em></span>`).join('');
