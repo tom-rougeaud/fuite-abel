@@ -1,4 +1,4 @@
-/* Projet : La fuite d’Abel  ·  Version : 1.6.0  ·  Date : 17/11/2026
+/* Projet : La fuite d’Abel  ·  Version : 1.7.0  ·  Date : 17/11/2026
    Auteur : Tom Rougeaud  ·  Licence : CC BY-NC 4.0
    Réalisé avec l’aide de l’IA : Claude Sonnet 5.5 (Anthropic) */
 import * as THREE from 'three';
@@ -24,7 +24,7 @@ const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 
 /* ---------- génération d’un niveau (déterministe) ---------- */
 export function genLevel(li, si) {
-  const L = LEVELS[li], v = SPEEDS[si] * L.vmul, r0 = mb(L.seed * 100 + si), obs = [], coins = [], picks = [], safes = []; let r = r0, nextSeg = 600; /* r : générateur du tronçon courant */
+  const L = LEVELS[li], v = SPEEDS[si] * L.vmul, r0 = mb(L.seed * 100 + si), obs = [], coins = [], picks = [], safes = []; let r = r0, nextSeg = 600, slal = 0; /* slal : nombre de rangées restantes d’un slalom */ /* r : générateur du tronçon courant */
   const addObs = (kind, lane, d0, extra = {}) => {
     const [len, w, top] = SIZE[kind], type = kind === 'barrier' ? 'barrier' : kind === 'beam' ? 'beam' : kind === 'busramp' ? 'ramp' : 'block';
     obs.push(Object.assign({ kind, lane, x: LX[lane], d0, d1: d0 + len, len, hw: w / 2, top, type, variant: (r() * 6) | 0 }, extra));
@@ -46,12 +46,15 @@ export function genLevel(li, si) {
     else if (q < 0.16 - 0.1 * diff) kind = 'free'; else if (q < 0.42) kind = 'barrier'; else if (q < 0.62) kind = 'beam'; else kind = rows >= 3 ? 'busramp' : 'barrier';
     if (combo) kind = r() < 0.5 ? 'barrier' : 'beam';
     if (boundary) kind = 'free';
+    /* slalom : 3 à 5 rangées rapprochées qui obligent à changer de voie à chaque fois (toutes les autres voies sont barrées) */
+    if (!boundary && slal === 0 && rows > 4 && r() < 0.1 + 0.12 * diff) slal = 3 + ((r() * 3) | 0);
+    const inSl = slal > 0 && !boundary; if (inSl) { kind = 'free'; combo = false; }
     const opts = [safe - 1, safe + 1].filter(l => l >= 0 && l <= 2);
-    const newSafe = rows < 2 || boundary ? 1 : (combo ? safe : r() < 0.5 ? opts[(r() * opts.length) | 0] : safe);
+    const newSafe = rows < 2 || boundary ? 1 : (combo ? safe : inSl || r() < 0.88 ? opts[(r() * opts.length) | 0] : safe); /* on change presque toujours de voie */
     // pièces de la zone de dégagement : le chemin glisse vers la nouvelle voie
     /* danger de la zone : décidé avant, pour élargir l’écart si la voie à quitter est concernée */
     const hOuter = [0, 2].filter(l => l !== newSafe && l !== prevSafe), hLeaves = prevSafe !== newSafe && prevSafe !== 1;
-    const hz = rows >= 2 && r() < 0.85 + 0.15 * diff ? { pull: r() < 0.5, early: hLeaves && r() < 0.7 } : null;
+    const hz = rows >= 2 && !inSl && r() < 0.85 + 0.15 * diff ? { pull: r() < 0.5, early: hLeaves && r() < 0.7 } : null;
     const hvf = v * (1 + 0.25 * Math.min(1, d / L.len));
     if (hz && hz.early) d += 0.5 * hvf; /* voie à quitter : il faut laisser le temps de réagir */
     if (hz && !hz.early && !hOuter.length) hz.none = true;
@@ -89,7 +92,7 @@ export function genLevel(li, si) {
     // autres voies
     for (let lane = 0; lane < 3; lane++) {
       if (lane === newSafe) continue;
-      const pBlock = Math.min(0.97, (kind === 'free' ? 0.6 : 0.72) + 0.3 * diff);
+      const pBlock = inSl ? 1 : Math.min(0.97, (kind === 'free' ? 0.6 : 0.72) + 0.3 * diff);
       if (rows < 2) continue;
       const q2 = r();
       if (q2 < pBlock) {
@@ -113,7 +116,8 @@ export function genLevel(li, si) {
     /* série : un second obstacle suit de près sur la même voie (saute, puis glisse) */
     lastCombo = combo; combo = rows > 3 && !lastCombo && (kind === 'barrier' || kind === 'beam') && r() < 0.18 + 0.4 * diff;
     const vf = v * (1 + 0.25 * Math.min(1, d / L.len)); /* vitesse réelle à cet endroit : l’écart reste faisable (un saut dure 0,77 s) */
-    d = prevEnd + (combo ? vf * 0.8 + 4 : Math.max(9, vf * (0.78 + 0.06 * (1 - Math.min(1, diff))) + r() * 0.08 * vf));
+    if (inSl) slal--;
+    d = prevEnd + (inSl ? vf * 0.62 + 3 : combo ? vf * 0.8 + 4 : Math.max(9, vf * (0.78 + 0.06 * (1 - Math.min(1, diff))) + r() * 0.08 * vf));
   }
   // fin de parcours : dernière ligne de pièces vers l’arche
   const g0 = prevEnd + 2; for (let dd = g0; dd < L.len - 4; dd += 3) { const u = (dd - g0) / Math.max(1, L.len - 4 - g0); coin(dd, LX[safe] + (0 - LX[safe]) * sm(0.1, 0.5, u), 1.0); }
