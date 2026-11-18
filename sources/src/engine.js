@@ -1,4 +1,4 @@
-/* Projet : La fuite d’Abel  ·  Version : 1.11.0  ·  Date : 18/11/2026
+/* Projet : La fuite d’Abel  ·  Version : 1.12.0  ·  Date : 18/11/2026
    Auteur : Tom Rougeaud  ·  Licence : CC BY-NC 4.0
    Réalisé avec l’aide de l’IA : Claude Sonnet 5.5 (Anthropic) */
 import * as THREE from 'three';
@@ -15,9 +15,13 @@ export const SPEEDS = [32, 43, 55];
 /* 15 niveaux : 5 décors × (jour, soir, nuit). Plus on avance, plus c’est long, rapide et chargé. */
 /* 50 niveaux de 5 000 m : décor = 5 lieux × 3 ambiances (jour, soir, nuit), difficulté et vitesse croissantes */
 export const LEVELS = Array.from({ length: 50 }, (_, i) => ({ theme: (i % 5) + 5 * (Math.floor(i / 5) % 3), len: 5000, diff: 0.4 + 0.7 * i / 49, vmul: 1 + 0.003 * i, seed: 11 * (i + 1) }));
-export const POWERS = { aimant: { icon: 'magnet', bg: '#c0392b', dur: 9 }, bouclier: { icon: 'shield', bg: '#2f7fd0', dur: 14 }, envol: { icon: 'balloon', bg: '#d9578a', dur: 5.5 }, x2: { icon: 'x2', bg: '#7a4fb8', dur: 10 }, ralenti: { icon: 'snail', bg: '#3a8f7a', dur: 6 }, bottes: { icon: 'rabbit', bg: '#d98a2b', dur: 12 }, repousse: { icon: 'wind', bg: '#4a7fa8', dur: 0 }, pluie: { icon: 'sparkle', bg: '#b88a1c', dur: 8 }, coeur: { icon: 'heart', bg: '#d1344a', dur: 0 } };
+export const POWERS = { aimant: { icon: 'magnet', bg: '#c0392b', dur: 9 }, bouclier: { icon: 'shield', bg: '#2f7fd0', dur: 14 }, envol: { icon: 'parachute', bg: '#c8433f', dur: 5.5 }, x2: { icon: 'x2', bg: '#7a4fb8', dur: 10 }, ralenti: { icon: 'snail', bg: '#3a8f7a', dur: 6 }, bottes: { icon: 'rabbit', bg: '#d98a2b', dur: 12 }, repousse: { icon: 'wind', bg: '#4a7fa8', dur: 0 }, pluie: { icon: 'sparkle', bg: '#b88a1c', dur: 8 }, coeur: { icon: 'heart', bg: '#d1344a', dur: 0 } };
 const SIZE = { sedan: [4.8, 1.9, 1.7], pickup: [5.6, 2.05, 2.1], van: [5.2, 2.1, 2.45], truck: [17.6, 2.55, 4.0], bus: [11.5, 2.5, 3.0], busramp: [18.5, 2.5, 3.0], barrier: [0.7, 2.6, 0.9], beam: [0.6, 3.3, 2.0], crate: [1.8, 1.8, 1.5], barrel: [1.6, 1.6, 1.5] };
 const RAMP = 7;
+/* scène de capture : style d’animation propre à chaque poursuivant (voir poseLose) */
+const LOSE_STYLE = { garde: 'tacle', sprinter: 'tacle', noel: 'tacle', sherif: 'tacle', pirate: 'tacle', momie: 'tacle', mascotte: 'ecrase', robot: 'ecrase', golem: 'ecrase', cuisinier: 'ecrase', ninja: 'saut', viking: 'charge', chevalier: 'charge', dino: 'charge', taureau: 'charge', fantome: 'vol', vampire: 'vol', sorciere: 'leve', alien: 'leve', chien: 'bond', ecureuil: 'bond', drone: 'pique' };
+const LOSE_TOT = 3.8; /* durée de la scène avant l’écran de fin (s) */
+const ACC = 0.55; /* accélération totale du défilement entre le départ et l’arrivée (+55 %) */
 
 function mb(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const sm = (a, b, t) => { const u = Math.max(0, Math.min(1, (t - a) / (b - a))); return u * u * (3 - 2 * u); };
@@ -61,7 +65,7 @@ export function genLevel(li, si) {
     /* danger de la zone : décidé avant, pour élargir l’écart si la voie à quitter est concernée */
     const hOuter = [0, 2].filter(l => l !== newSafe && l !== prevSafe), hLeaves = prevSafe !== newSafe && prevSafe !== 1;
     const hz = hopNow ? null : pullNow ? { pull: true, early: true } : (rows >= 2 && !inSl && r() < 0.85 ? { pull: false, early: prevSafe !== newSafe && r() < 0.8 } : null);
-    const hvf = v * (1 + 0.25 * Math.min(1, d / L.len));
+    const hvf = v * (1 + ACC * Math.min(1, d / L.len));
     if (hz && hz.early) d += 0.75 * hvf; /* voie à quitter : temps de réagir (caisse : l’ombre prévient plus tôt) */
     if (hz && !hz.early && !hOuter.length) hz.none = true;
     const g0 = prevEnd + 2, g1 = d - 3;
@@ -124,21 +128,21 @@ export function genLevel(li, si) {
       else if (q2 < Math.min(0.99, pBlock + 0.25)) { addObs(r() < 0.5 ? 'barrier' : 'beam', lane, d + r() * 2); }
     }
     if (hopNow) { /* le véhicule surgit dans la voie du saut, juste après l’obstacle */
-      const kv = r() < 0.5 ? 'van' : 'truck', vf2 = v * (1 + 0.25 * Math.min(1, d / L.len)), dv = d + 0.55 * vf2, e = addObs(kv, newSafe, dv);
+      const kv = r() < 0.5 ? 'van' : 'truck', vf2 = v * (1 + ACC * Math.min(1, d / L.len)), dv = d + 0.55 * vf2, e = addObs(kv, newSafe, dv);
       safes.push({ g0: swPt, lane: newSafe, from: prevSafe, end: d + 6 }); rowLen = Math.max(rowLen, e + 0.55 * vf2); safes.push({ g0: d + 7, lane: hopT, from: newSafe, end: d + rowLen });
     } else safes.push({ g0: swPt, lane: newSafe, from: prevSafe, end: d + rowLen });
     rows++; prevSafe = endLane; safe = endLane; prevEnd = d + rowLen;
     // bonus
     if (d - lastPick > 330 + 220 * si && rows > 3) { /* bonus plus rares ; cœur et ballons très rares */
-      const t = r(), type = t < 0.16 ? 'aimant' : t < 0.30 ? 'bouclier' : t < 0.35 ? 'envol' : t < 0.47 ? 'x2' : t < 0.51 ? 'coeur' : t < 0.63 ? 'ralenti' : t < 0.77 ? 'bottes' : t < 0.89 ? 'repousse' : 'pluie';
+      const t = r(), type = t < 0.18 ? 'aimant' : t < 0.36 ? 'bouclier' : t < 0.50 ? 'x2' : t < 0.65 ? 'ralenti' : t < 0.80 ? 'bottes' : t < 0.92 ? 'repousse' : 'pluie'; /* le cœur et le parachute viennent des paliers de 100 pièces */
       const pd = prevEnd + 5;
       picks.push({ d: pd, x: LX[endLane], type, got: false });
-      if (type === 'envol') for (let k = 0; k < 12; k++) coin(pd + 12 + k * 2.6, LX[endLane], 5.0);
+      
       lastPick = d;
     }
     /* série : un second obstacle suit de près sur la même voie (saute, puis glisse) */
     lastCombo = combo; combo = rows > 3 && !lastCombo && !hopNow && (kind === 'barrier' || kind === 'beam') && r() < 0.18 + 0.4 * diff;
-    const vf = v * (1 + 0.25 * Math.min(1, d / L.len)); /* vitesse réelle à cet endroit : l’écart reste faisable (un saut dure 0,77 s) */
+    const vf = v * (1 + ACC * Math.min(1, d / L.len)); /* vitesse réelle à cet endroit : l’écart reste faisable (un saut dure 0,77 s) */
     if (inSl) slal--;
     d = prevEnd + (inSl ? vf * 0.62 + 3 : combo ? vf * 0.8 + 4 : Math.max(9, vf * (0.6 + 0.06 * (1 - Math.min(1, diff))) + r() * 0.06 * vf));
   }
@@ -190,7 +194,7 @@ export function createEngine(canvas, cb = {}) {
   function buildChars() {
     if (runner) scene.remove(runner); if (chaser) scene.remove(chaser);
     runner = buildRunner(S.look); scene.add(runner);
-    chaser = buildChaser(S.chaserType); chaser.scale.setScalar(chaser.userData.sc);
+    chaser = buildChaser(S.chaserType); chaser.userData.id = S.chaserType; chaser.scale.setScalar(chaser.userData.sc);
     scene.add(chaser);
     if (!shieldMesh) { shieldMesh = new THREE.Mesh(new THREE.SphereGeometry(1.1, 20, 14), new THREE.MeshBasicMaterial({ color: '#58a8ff', transparent: true, opacity: 0.22, depthWrite: false })); shieldMesh.visible = false; scene.add(shieldMesh); }
     if (!platform) { platform = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.25, 0.12, 40), new THREE.MeshStandardMaterial({ color: '#cfd6e2', roughness: 0.5 })); platform.position.y = -0.06; platform.receiveShadow = true; platform.visible = false; scene.add(platform); }
@@ -201,6 +205,7 @@ export function createEngine(canvas, cb = {}) {
 
   /* ---------- modes ---------- */
   function clearRun() {
+    obsGroup.visible = true; pickGroup.visible = true; /* réaffichés après la scène de défaite */
     live.forEach(o => { obsGroup.remove(o.m); if (o.sh) obsGroup.remove(o.sh); }); live.clear(); pickGroup.clear();
     if (coinMesh) { scene.remove(coinMesh); coinMesh.dispose(); coinMesh = null; }
     if (finishGroup) { scene.remove(finishGroup); finishGroup = null; } if (confetti) { scene.remove(confetti); confetti = null; }
@@ -220,7 +225,7 @@ export function createEngine(canvas, cb = {}) {
     clearRun(); S.mode = 'play'; S.paused = false; platform.visible = false;
     lev = genLevel(li, si); lev.li = li; lev.totalCoins = lev.coins.length;
     S.lastZ = 0; S.themeIdx === lev.theme && S.scen && (S.scen.dispose(), S.scen = null, S.themeIdx = -1); setTheme(lev.theme);
-    Object.assign(P, { d: 0, x: 0, y: 0, vy: 0, lane: 1, grounded: true, coyote: 0, jumpBuf: 0, slide: 0, inv: 0, hitT: 9, hearts: [3, 3, 2][si], maxH: [3, 3, 2][si], coins: 0, phi: 0, fly: 0, shield: 0, magnet: 0, x2: 0, slow: 0, boots: 0, rain: 0, lost: 0, tired: 0, speedMul: 1, state: 'run', endT: 0, camShake: 0, flash: 0, vx: 0, airT: 0, jumped: false, land: 0, sk: 0, jk: 0, ended: false });
+    Object.assign(P, { d: 0, x: 0, y: 0, vy: 0, lane: 1, grounded: true, coyote: 0, jumpBuf: 0, slide: 0, inv: 0, hitT: 9, hearts: [3, 3, 2][si], maxH: [3, 3, 2][si], coins: 0, phi: 0, fly: 0, shield: 0, magnet: 0, x2: 0, slow: 0, boots: 0, rain: 0, lost: 0, tired: 0, speedMul: 1, state: 'run', endT: 0, camShake: 0, flash: 0, vx: 0, airT: 0, jumped: false, land: 0, sk: 0, jk: 0, ended: false, fx1: 0, fx2: 0, nb: 0, nextB: 100 });
     Object.assign(C, { gap: 14, x: 1.2, phi: 0, nextVisit: 8 + Math.random() * 4, vphase: 0, vt: 0, near: 0 });
     const cm = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.34, 0.34, 0.07, 28), coinMaterials(), 220); cm.frustumCulled = false; cm.count = 0; cm.castShadow = false; scene.add(cm); coinMesh = cm;
     // arche d’arrivée
@@ -233,7 +238,7 @@ export function createEngine(canvas, cb = {}) {
     finishGroup.position.z = -lev.len; scene.add(finishGroup);
     for (const p of lev.picks) {
       const def = POWERS[p.type], sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: badgeTexture(def.icon, def.bg), transparent: true, depthWrite: false, fog: false }));
-      sp.scale.set(1.5, 1.5, 1); sp.position.set(p.x, 1.5, -p.d); p.sp = sp; pickGroup.add(sp);
+      sp.scale.set(2.1, 2.1, 1); sp.position.set(p.x, 1.6, -p.d); p.sp = sp; pickGroup.add(sp);
     }
     S.scen.update(0, 0, cam, 0); emit('go');
   }
@@ -319,14 +324,21 @@ export function createEngine(canvas, cb = {}) {
 
   /* ---------- mise à jour ---------- */
   const dummy = new THREE.Object3D();
+  /* bonus tous les 100 pièces : un cœur (si on a perdu des cœurs) ou un parachute, posé devant toi sur le chemin libre */
+  function spawnBonus() {
+    const z = lev.safes.find(q => q.g0 > P.d + 80 && q.end - q.g0 > 12 && q.end < lev.len - 60); if (!z) return;
+    P.nb++; const type = P.hearts <= 1 && P.hearts < P.maxH ? 'coeur' : (P.hearts < P.maxH && P.nb % 2 === 1 ? 'coeur' : 'envol'), def = POWERS[type];
+    const p = { d: z.g0 + 6, x: LX[z.lane], type, got: false };
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: badgeTexture(def.icon, def.bg), transparent: true, depthWrite: false, fog: false })); sp.scale.set(2.1, 2.1, 1); sp.position.set(p.x, 1.6, -p.d); p.sp = sp; pickGroup.add(sp); lev.picks.push(p);
+  }
   function stepPlay(dt) {
     P.hitT += dt; P.inv = Math.max(0, P.inv - dt); P.slide = Math.max(0, P.slide - dt); P.magnet = Math.max(0, P.magnet - dt); P.x2 = Math.max(0, P.x2 - dt); P.slow = Math.max(0, P.slow - dt); P.boots = Math.max(0, P.boots - dt); P.rain = Math.max(0, P.rain - dt); P.fly = Math.max(0, P.fly - dt);
     P.flash = Math.max(0, P.flash - dt * 2); P.camShake = Math.max(0, P.camShake - dt);
-    const v0 = lev.v * (1 + 0.25 * Math.min(1, P.d / lev.len));
+    const v0 = lev.v * (1 + ACC * Math.min(1, P.d / lev.len));
     let spd = v0;
     if (P.state === 'run') spd *= 0.5 + 0.5 * sm(0, 1.3, P.hitT);
     else if (P.state === 'win') spd *= Math.max(0, 1 - P.endT / 2.2);
-    else spd *= Math.max(0, 1 - P.endT / 0.9);
+    else spd = 0; /* défaite : tout s’arrête, la scène de capture prend le relais */
     if (P.slow > 0) spd *= 0.62; /* bonus ralenti : le décor défile moins vite */
     P.speedMul = spd / v0; P.vNow = spd;
     P.d += spd * dt;
@@ -356,7 +368,8 @@ export function createEngine(canvas, cb = {}) {
       if (P.d >= lev.len) { P.state = 'win'; P.endT = 0; emit('win'); makeConfetti(); }
     } else P.endT += dt;
     if (P.state === 'win' && P.endT > 2.6 && !P.ended) { P.ended = true; finishRun(true); }
-    if (P.state === 'lose' && P.endT > 1.8 && !P.ended) { P.ended = true; finishRun(false); }
+    if (P.state === 'lose' && P.endT > LOSE_TOT && !P.ended) { P.ended = true; finishRun(false); }
+    if (P.coins >= P.nextB && P.state === 'run') { P.nextB += 100; spawnBonus(); }
     /* pièces */
     const pc = P.y + (P.slide > 0 ? 0.5 : 0.9);
     while (coinStart < lev.coins.length && lev.coins[coinStart].d < P.d - 4) coinStart++;
@@ -367,7 +380,7 @@ export function createEngine(canvas, cb = {}) {
       if (Math.abs(c.d - P.d) < 1.1 && Math.abs(c.x - P.x) < 1.3 && Math.abs(c.y - pc) < 1.5 && P.state !== 'lose') { c.got = true; P.coins += P.rain > 0 ? 3 : P.x2 > 0 ? 2 : 1; emit('coin'); }
     }
     for (const p of lev.picks) {
-      if (p.got) continue; if (Math.abs(p.d - P.d) < 1.3 && Math.abs(p.x - P.x) < 1.5 && Math.abs(1.5 - pc) < 1.6 + (P.y > 0.5 ? 0.8 : 0)) {
+      if (p.got) continue; if (Math.abs(p.d - P.d) < 1.3 && Math.abs(p.x - P.x) < 1.9 && Math.abs(1.5 - pc) < 1.6 + (P.y > 0.5 ? 0.8 : 0)) {
         p.got = true; p.sp.visible = false; emit('power');
         if (p.type === 'aimant') P.magnet = POWERS.aimant.dur; else if (p.type === 'bouclier') P.shield = POWERS.bouclier.dur; else if (p.type === 'envol') { P.fly = POWERS.envol.dur; P.inv = Math.max(P.inv, POWERS.envol.dur + 0.6); } else if (p.type === 'x2') P.x2 = POWERS.x2.dur; else if (p.type === 'ralenti') P.slow = POWERS.ralenti.dur; else if (p.type === 'bottes') P.boots = POWERS.bottes.dur; else if (p.type === 'pluie') P.rain = POWERS.pluie.dur; else if (p.type === 'repousse') { C.gap += 14; C.vphase = 0; C.nextVisit = 16; C.near = 0; } else if (p.type === 'coeur') { if (P.hearts < P.maxH) P.hearts++; else P.coins += 5; }
       }
@@ -408,10 +421,63 @@ export function createEngine(canvas, cb = {}) {
       const rot = new THREE.Matrix4().makeRotationY(spin + c.d * 0.35); coinMesh.setMatrixAt(n++, rot.setPosition(c.x, c.y, -c.d).multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2)));
     }
     coinMesh.count = n; coinMesh.instanceMatrix.needsUpdate = true;
-    for (const p of lev.picks) if (p.sp && !p.got) { p.sp.position.y = 1.5 + Math.sin(S.t * 3 + p.d) * 0.18; }
+    for (const p of lev.picks) if (p.sp && !p.got) { p.sp.position.y = 1.6 + Math.sin(S.t * 3 + p.d) * 0.18; }
     if (confetti) { const a = confetti.geometry.attributes.position; for (let i = 0; i < a.count; i++) { let y = a.getY(i) - 0.05 * (1 + (i % 4) * 0.2); if (y < 0) y = 11; a.setY(i, y); a.setX(i, a.getX(i) + Math.sin(S.t * 2 + i) * 0.01); } a.needsUpdate = true; }
   }
+  /* ---------- scène de capture (défaite) : le poursuivant attrape Abel, le met à terre et lui saute dessus ----------
+     Les obstacles sont masqués : on voit toujours la scène. Chaque modèle a son style (tacle, écrasement, saut tournant, charge, vol, lévitation, bond, piqué). */
+  function poseLose() {
+    const t = P.endT, id = chaser.userData.id, st = LOSE_STYLE[id] || 'tacle', kind = chaser.userData.kind;
+    const ax = P.x, az = -P.d, mix = (a, b, k) => a + (b - a) * clamp(k, 0, 1), U = (a, b) => clamp((t - a) / (b - a), 0, 1);
+    obsGroup.visible = false; pickGroup.visible = false; if (coinMesh) coinMesh.visible = false; shieldMesh.visible = false;
+    /* --- le poursuivant : zoff = distance derrière Abel (négatif = devant), y = hauteur --- */
+    let zoff = 0, y = 0, ry = 0, rx = 0, ex = {}, fallAt = 1.0, fallKind = 'plat';
+    if (st === 'tacle') { /* il court, bondit sur le dos d’Abel et lève les bras */
+      const run = U(0, 0.8), lp = U(0.8, 1.35); fallAt = 1.0;
+      zoff = mix(9, 2.4, run); if (t >= 0.8) { zoff = mix(2.4, 0.15, lp); y = 1.0 * Math.sin(Math.PI * lp); rx = -0.7 * Math.sin(Math.PI * lp); ex = { jump: 1, ap: lp * 0.8 }; }
+      if (t >= 1.35) { zoff = 0.15; y = 0.12 + 0.03 * Math.sin(t * 18); rx = -0.5; ex = { win: 1 }; }
+    } else if (st === 'ecrase') { /* il avance lourdement, lève les bras, saute et s’écrase sur Abel */
+      fallAt = 2.0; fallKind = 'ecrase'; zoff = mix(9, 3.6, U(0, 1.2)); ex = { speed: 0.6 };
+      if (t > 1.2) { ex = { win: U(1.2, 1.6) }; } if (t >= 1.6) { const j = U(1.6, 2.0); zoff = mix(3.6, 0.1, j); y = 1.3 * Math.sin(Math.PI * j); ex = { win: 1 - j * 0.5, jump: j }; }
+      if (t >= 2.0) { zoff = 0.1; y = 0.12; ex = { win: 1 }; if (!P.fx2) { P.fx2 = 1; P.camShake = 0.6; emit('thud'); } }
+    } else if (st === 'saut') { /* saut périlleux tournoyant puis coup de pied */
+      fallAt = 1.3; const j = U(0.6, 1.4); zoff = t < 0.6 ? mix(9, 4.5, U(0, 0.6)) : mix(4.5, 0.3, j);
+      if (t >= 0.6 && t < 1.4) { y = 1.8 * Math.sin(Math.PI * j); ry = Math.PI * 4 * j; ex = { jump: 1, ap: j * 0.8 }; }
+      if (t >= 1.4) { zoff = 0.3; rx = -0.4; ex = { win: 1 }; }
+    } else if (st === 'charge') { /* il fonce, projette Abel en l’air, le dépasse puis se retourne en vainqueur */
+      fallAt = 0.9; fallKind = 'lance'; zoff = mix(9, 0.4, U(0, 0.9));
+      if (t > 0.9) zoff = mix(0.4, -1.2, U(0.9, 1.5));
+      if (t > 1.9) ry = Math.PI * U(1.9, 2.4); if (t > 2.5) { ex = { win: 1 }; }
+    } else if (st === 'vol') { /* il vole au-dessus de la route puis pique sur Abel */
+      fallAt = 1.1; zoff = mix(10, 1.2, U(0, 1.0)); y = 1.6; ex = { jump: 1, ap: 0.5 };
+      if (t > 1.0) { const d = U(1.0, 1.4); zoff = mix(1.2, 0.3, d); y = mix(1.6, 0.8, d); } if (t > 1.5) y = 0.9 + 0.08 * Math.sin(t * 3); if (t > 1.5) ex = { win: 1 };
+    } else if (st === 'leve') { /* il lève les bras : Abel flotte en tournant, puis retombe */
+      fallAt = 2.9; fallKind = 'leve'; zoff = mix(10, 3.2, U(0, 0.9)); if (t > 0.9) { ex = { win: 1 }; y = 0.15 + 0.1 * Math.sin(t * 3); }
+    } else if (st === 'bond') { /* il court puis bondit sur le dos d’Abel (quadrupède) */
+      fallAt = 1.0; const lp = U(0.8, 1.3); zoff = mix(9, 2.6, U(0, 0.8));
+      if (t >= 0.8) { zoff = mix(2.6, 0.2, lp); y = 1.1 * Math.sin(Math.PI * lp); rx = -0.4 * Math.sin(Math.PI * lp); }
+      if (t >= 1.3) { zoff = 0.2; y = 0.45 + 0.04 * Math.sin(t * 16); }
+    } else { /* pique : le drone fond sur Abel et le secoue */
+      fallAt = 1.2; zoff = mix(11, 1.0, U(0, 1.0)); if (t > 1.0) y = -0.7 * U(1.0, 1.5); if (t > 1.5) { y = -0.7 + 0.05 * Math.sin(t * 25); }
+    }
+    chaser.visible = true; chaser.position.set(ax + (st === 'tacle' || st === 'bond' ? 0 : 0.0), y, az + zoff); chaser.rotation.set(rx, ry, 0);
+    poseChaser(chaser, C.phi, S.t, ex);
+    /* --- Abel : se fait attraper puis tombe (plat, écrasé, projeté ou soulevé) --- */
+    const fk = U(fallAt, fallAt + (fallKind === 'ecrase' ? 0.12 : 0.4)); let ry2 = 0, rx2 = 0, ay = 0, az2 = 0, ax2 = 0, pose = { stumble: 1 - fk * 0.4, tired: 1 };
+    if (fallKind === 'plat' || fallKind === 'ecrase') { rx2 = -1.5 * fk; ay = 0.14 * fk; if (fk >= 1 && !P.fx1) { P.fx1 = 1; P.camShake = 0.3; emit('thud'); } }
+    else if (fallKind === 'lance') { const u = U(fallAt, fallAt + 0.95); ay = 2.0 * Math.sin(Math.PI * u) + 0.14 * u; rx2 = -(2 * Math.PI + 1.5) * u; az2 = -0.8 * u; if (u >= 1 && !P.fx1) { P.fx1 = 1; P.camShake = 0.3; emit('thud'); } }
+    else if (fallKind === 'leve') { const up = U(1.0, 1.9), dn = U(fallAt, fallAt + 0.3); ay = 2.1 * sm(0, 1, up) * (1 - dn) + 0.14 * dn; ry2 = 6 * up * (1 - dn); rx2 = -1.5 * dn; pose = { stumble: 1 - dn * 0.4, tired: 1 }; if (dn >= 1 && !P.fx1) { P.fx1 = 1; P.camShake = 0.3; emit('thud'); } }
+    if (st === 'pique' && t > 1.4) ax2 = 0.04 * Math.sin(t * 40);
+    runner.visible = true; runner.position.set(ax + ax2, ay, az + az2); runner.rotation.set(rx2, ry2, 0);
+    poseRunner(runner, Object.assign({ phi: 0, t: S.t, speed: 0.2 }, pose));
+    /* --- caméra : de face et un peu de côté, pour voir le poursuivant arriver --- */
+    const side = ax > 1 ? -1 : 1, shake = P.camShake > 0 ? Math.sin(S.t * 80) * 0.05 * P.camShake : 0;
+    cam.position.set(ax + side * 3.4 + shake, 2.0 + 0.1 * Math.sin(t) + shake, az - 5.4); cam.lookAt(ax, 0.8, az + 0.3);
+    cam.fov = 55; cam.updateProjectionMatrix();
+    sun.position.set(P.x + THEMES[S.themeIdx].sun[2][0], THEMES[S.themeIdx].sun[2][1], -P.d + THEMES[S.themeIdx].sun[2][2]); sun.target.position.set(P.x, 0, -P.d - 2); sun.target.updateMatrixWorld();
+  }
   function posePlay(dt) {
+    if (P.state === 'lose') { poseLose(); return; }
     P.sk += ((P.slide > 0 ? 1 : 0) - P.sk) * Math.min(1, dt * (P.slide > 0 ? 16 : 9)); const sliding = P.sk;
     const jumpK = P.fly > 0 ? 0 : clamp((P.y - (P.grounded ? P.y : 0)) > 0 || !P.grounded ? 1 : 0, 0, 1);
     runner.position.set(P.x, P.y, -P.d); runner.rotation.set(0, -clamp(P.vx * 0.03, -0.5, 0.5), -clamp(P.vx * 0.022, -0.35, 0.35));

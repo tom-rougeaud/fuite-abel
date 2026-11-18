@@ -1,4 +1,4 @@
-/* Projet : La fuite d’Abel  ·  Version : 1.11.0  ·  Date : 18/11/2026
+/* Projet : La fuite d’Abel  ·  Version : 1.12.0  ·  Date : 18/11/2026
    Auteur : Tom Rougeaud  ·  Licence : CC BY-NC 4.0
    Réalisé avec l’aide de l’IA : Claude Sonnet 5.5 (Anthropic) */
 import * as THREE from 'three';
@@ -24,6 +24,7 @@ const I = {
   squirrel: `<path ${S} d="M8 20c-2-3 0-6 3-6 2 0 3-2 3-4 0-3 3-5 5-3-1 1-1 2 0 3-3 0-3 4-1 6 1 2 0 4-3 4z"/><circle cx="14.6" cy="8.4" r="0.8" fill="currentColor"/>`,
   santa: `<path ${S} d="M5 11c0-5 5-8 9-7l-2 4 5 3z"/><circle cx="15" cy="4" r="1.3" fill="currentColor"/><path ${S} d="M7 13c0 6 3 8 5 8s5-2 5-8"/>`,
   witch: `<path ${S} d="M12 3l4 12H8z"/><path ${S} d="M4 17h16"/><path ${S} d="M7 20h10"/>`,
+  parachute: `<path ${S} d="M3 10a9 8 0 0118 0z"/><path ${S} d="M3 10l8 9M21 10l-8 9M9 10l2 9M15 10l-2 9"/><circle cx="12" cy="20.5" r="1.6" fill="currentColor"/>`,
   chef: `<path ${S} d="M7 11a3.5 3.5 0 011-6.5 4 4 0 018 0A3.5 3.5 0 0117 11z"/><path ${S} d="M7 11v8h10v-8"/>`,
   pirate: `<path ${S} d="M5 11a7 7 0 0114 0v3H5z"/><circle cx="9.5" cy="10.5" r="1.4" fill="currentColor"/><circle cx="14.5" cy="10.5" r="1.4" fill="currentColor"/><path ${S} d="M9 17l6 3M15 17l-6 3"/>`,
   ninja: `<path ${S} d="M5 10a7 6 0 0114 0v6a7 5 0 01-14 0z"/><path ${S} d="M5 11h14v3H5z"/><path ${S} d="M18 6l3-2M18 8l3 1"/>`,
@@ -105,13 +106,15 @@ export function svgTexture(name, color = '#ffffff', size = 128) {
   const key = name + color + size; if (texCache[key]) return texCache[key];
   const c = document.createElement('canvas'); c.width = c.height = size;
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; texCache[key] = t;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${size}" height="${size}" style="color:${color}">${I[name] || ''}</svg>`.replace(/currentColor/g, color);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${size}" height="${size}" style="color:${color}">${svgOk(I[name] || '')}</svg>`.replace(/currentColor/g, color);
   const img = new Image();
   img.onload = () => { const g = c.getContext('2d'); g.clearRect(0, 0, size, size); g.drawImage(img, 0, 0, size, size); t.needsUpdate = true; };
   img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
   return t;
 }
 
+/* SVG valide pour une image : retire les attributs en double (le navigateur les tolère dans la page, pas dans une image) */
+function svgOk(str) { return str.replace(/<([a-zA-Z]+)((?:\s+[a-zA-Z:-]+="[^"]*")+)\s*(\/?)>/g, (m, tag, attrs, sl) => { const seen = {}; const re = /\s+([a-zA-Z:-]+)="([^"]*)"/g; let x; while ((x = re.exec(attrs))) seen[x[1]] = x[2]; return '<' + tag + Object.entries(seen).map(([k, v]) => ` ${k}="${v}"`).join('') + sl + '>'; }); }
 /* pastille ronde avec icône blanche (bonus à ramasser) */
 const bCache = {};
 export function badgeTexture(name, bg, size = 160) {
@@ -122,10 +125,10 @@ export function badgeTexture(name, bg, size = 160) {
     const g = c.getContext('2d'); g.clearRect(0, 0, size, size);
     g.fillStyle = 'rgba(255,255,255,0.95)'; g.beginPath(); g.arc(size / 2, size / 2, size * 0.48, 0, 7); g.fill();
     g.fillStyle = bg; g.beginPath(); g.arc(size / 2, size / 2, size * 0.41, 0, 7); g.fill();
-    if (img) g.drawImage(img, size * 0.22, size * 0.22, size * 0.56, size * 0.56); t.needsUpdate = true;
+    if (img) g.drawImage(img, size * 0.17, size * 0.17, size * 0.66, size * 0.66); t.needsUpdate = true;
   };
   draw(null);
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="96" height="96">${(I[name] || '').replace(/currentColor/g, '#ffffff')}</svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="96" height="96">${svgOk(I[name] || '').replace(/currentColor/g, '#ffffff')}</svg>`;
   const img = new Image(); img.onload = () => draw(img); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
   return t;
 }

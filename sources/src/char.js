@@ -1,4 +1,4 @@
-/* Projet : La fuite d’Abel  ·  Version : 1.11.0  ·  Date : 18/11/2026
+/* Projet : La fuite d’Abel  ·  Version : 1.12.0  ·  Date : 18/11/2026
    Auteur : Tom Rougeaud  ·  Licence : CC BY-NC 4.0
    Réalisé avec l’aide de l’IA : Claude Sonnet 5.5 (Anthropic) */
 import * as THREE from 'three';
@@ -210,14 +210,16 @@ export function buildRunner(opts = {}) {
     const sm = new THREE.MeshStandardMaterial({ color: P.neckColor, roughness: 0.95, side: THREE.DoubleSide });
     const rb = ribbon(0.11, 0.09, 8, sm); B.neck.add(rb); B.scarf.push(rb);
   }
-  /* ballons (pose « envol ») */
+  /* parachute (pose « envol ») : voile à 8 quartiers rouges et blancs, avec ses suspentes (le groupe garde le nom B.balloons) */
   B.balloons = grp(0, 0, 0); B.balloons.visible = false; B.chest.add(B.balloons);
-  [['#ee5d6c', -0.18, 0.18], ['#f2c14e', 0.0, 0.3], ['#58a0e8', 0.18, 0.15]].forEach(([c, x, h]) => {
-    const b = ell(0.17, 0.2, 0.17, mat(c, 0.35, 0, null), 16); b.position.set(x * 1.6, 1.25 + h, -0.05); B.balloons.add(b);
-    const knot = mesh(new THREE.ConeGeometry(0.03, 0.05, 6), mat(c, 0.35)); knot.position.set(x * 1.6, 1.03 + h, -0.05); knot.rotation.x = Math.PI; B.balloons.add(knot);
-    const str = mesh(new THREE.CylinderGeometry(0.004, 0.004, 1.0 + h, 4), mat('#eeeeee', 0.9), false);
-    str.position.set(x * 0.8, 0.5 + (1.0 + h) / 2 - 0.5 + 0.08, -0.05); str.rotation.z = -x * 1.6 / (1.0) * 0.62; B.balloons.add(str);
-  });
+  const canopyY = 1.0, canopyR = 0.7, redM = mat('#c8433f', 0.6, 0, null), whiteM = mat('#f4f1ea', 0.6, 0, null);
+  for (let i = 0; i < 8; i++) {
+    const w = mesh(new THREE.SphereGeometry(canopyR, 6, 10, i * Math.PI / 4, Math.PI / 4, 0, Math.PI / 2), i % 2 ? whiteM : redM, false); w.scale.y = 0.62; w.position.set(0, canopyY, -0.05); w.material.side = THREE.DoubleSide; B.balloons.add(w);
+  }
+  for (let i = 0; i < 6; i++) { /* suspentes : du bord de la voile aux épaules */
+    const a = i * Math.PI / 3 + 0.3, p1 = new THREE.Vector3(canopyR * Math.cos(a), canopyY, -0.05 + canopyR * Math.sin(a)), p2 = new THREE.Vector3(Math.cos(a) > 0 ? 0.2 : -0.2, 0.34, -0.03), dir = p1.clone().sub(p2), len = dir.length();
+    const ln = mesh(new THREE.CylinderGeometry(0.004, 0.004, len, 4), mat('#eeeeee', 0.9), false); ln.position.copy(p2.clone().add(p1).multiplyScalar(0.5)); ln.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize()); B.balloons.add(ln);
+  }
   root.userData = { B, P, kind: 'runner' };
   return root;
 }
@@ -294,7 +296,7 @@ export function poseRunner(R, st) {
     B.shL.rotation.z = L(B.shL.rotation.z, 0.8, k); B.shR.rotation.z = L(B.shR.rotation.z, -0.8, k);
     B.elL.rotation.x = L(B.elL.rotation.x, 0.3, k); B.elR.rotation.x = L(B.elR.rotation.x, 0.3, k);
   }
-  /* envol : suspendu aux ballons */
+  /* envol : suspendu au parachute */
   B.balloons.visible = fly > 0.01;
   if (fly > 0) {
     const k = fly, sw = Math.sin(t * 3);
