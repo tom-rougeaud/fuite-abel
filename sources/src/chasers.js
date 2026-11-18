@@ -1,4 +1,4 @@
-/* Projet : La fuite d’Abel  ·  Version : 1.8.0  ·  Date : 18/11/2026
+/* Projet : La fuite d’Abel  ·  Version : 1.9.0  ·  Date : 18/11/2026
    Auteur : Tom Rougeaud  ·  Licence : CC BY-NC 4.0
    Réalisé avec l’aide de l’IA : Claude Sonnet 5.5 (Anthropic) */
 /* ===== SECTION : poursuivants =====
@@ -88,21 +88,35 @@ export function buildChaser(type) {
     return tag(g, 'dog', 1.3, 1.6, 0.5, 0.95);
   }
 
-  /* ---- Père Noël ---- */
+  /* ---- Père Noël : costume rouge très fourré de blanc ---- */
   if (type === 'noel') {
     const g = buildRunner({ skin: '#e8b99a', hairStyle: 'court', hair: '#f2f2f2', top: 'sweat', topColor: '#b5323a', bottom: 'long', bottomColor: '#b5323a', shoes: '#1c1a1a', hat: 'bonnet', hatColor: '#b5323a', glasses: null, back: 'sac', backColor: '#8a5a3a', neck: null }), B = g.userData.B;
-    const white = mat('#f4f1ea', 0.95), red = mat('#b5323a', 0.9), black = mat('#1c1a1a', 0.6);
-    put(B.head, ell(0.085, 0.1, 0.06, white, 14), 0, -0.1, -0.06); put(B.head, ell(0.04, 0.02, 0.02, white, 8), -0.03, -0.035, -0.105); put(B.head, ell(0.04, 0.02, 0.02, white, 8), 0.03, -0.035, -0.105);
-    put(B.chest, ell(0.2, 0.2, 0.16, red, 14), 0, 0.08, -0.06); put(B.chest, mesh(new THREE.TorusGeometry(0.2, 0.025, 8, 24), black), 0, 0.02, -0.04, Math.PI / 2, 0, 0);
-    put(B.chest, box(0.06, 0.05, 0.02, mat('#d6a93c', 0.4, 0.5)), 0, 0.02, -0.235);
+    const white = mat('#f6f3ec', 1), red = mat('#b5323a', 0.9), black = mat('#1c1a1a', 0.6), ring = (r, t) => mesh(new THREE.TorusGeometry(r, t, 10, 24), white);
+    /* barbe, moustache, sourcils : grosse moumoute blanche */
+    put(B.head, ell(0.098, 0.12, 0.07, white, 14), 0, -0.1, -0.06); put(B.head, ell(0.05, 0.026, 0.026, white, 8), -0.035, -0.04, -0.105); put(B.head, ell(0.05, 0.026, 0.026, white, 8), 0.035, -0.04, -0.105);
+    put(B.head, ell(0.03, 0.012, 0.012, white, 8), -0.034, 0.045, -0.092); put(B.head, ell(0.03, 0.012, 0.012, white, 8), 0.034, 0.045, -0.092);
+    /* bonnet : gros bandeau de fourrure et pompon */
+    put(B.head, ring(0.1, 0.034), 0, 0.06, 0, Math.PI / 2, 0, 0); put(B.head, ell(0.04, 0.04, 0.04, white, 12), 0.02, 0.27, 0.1);
+    /* col, ventre, ceinture, bande de fourrure sur le devant, bas de la veste, poignets, bas de pantalon, gants */
+    put(B.chest, ring(0.13, 0.04), 0, 0.43, 0, Math.PI / 2, 0, 0); put(B.chest, ell(0.2, 0.2, 0.16, red, 14), 0, 0.08, -0.06);
+    put(B.chest, box(0.09, 0.62, 0.03, white), 0, 0.17, -0.2); put(B.chest, ring(0.2, 0.034), 0, 0.02, -0.04, Math.PI / 2, 0, 0);
+    put(B.chest, mesh(new THREE.TorusGeometry(0.2, 0.024, 8, 24), black), 0, 0.1, -0.05, Math.PI / 2, 0, 0); put(B.chest, box(0.07, 0.06, 0.02, mat('#d6a93c', 0.4, 0.5)), 0, 0.1, -0.245);
+    put(B.pelvis, ring(0.2, 0.05), 0, -0.1, 0, Math.PI / 2, 0, 0);
+    for (const k of ['L', 'R']) {
+      put(B['el' + k], ring(0.04, 0.026), 0, -0.23, 0, Math.PI / 2, 0, 0); put(B['sh' + k], ell(0.07, 0.06, 0.07, white, 10), 0, 0.02, 0);
+      put(B['hd' + k], ell(0.042, 0.052, 0.04, black, 10), 0, -0.03, 0); put(B['ankle' + k], ring(0.062, 0.03), 0, 0.06, 0, Math.PI / 2, 0, 0);
+    }
     return tag(g, 'runner', 1.15, 0.95);
   }
 
-  /* ---- athlète sprinter : très rapide, bandeau ---- */
+  /* ---- athlète sprinter : débardeur, short, dossard, bandeau, bracelets éponge ---- */
   if (type === 'sprinter') {
-    const g = buildRunner({ skin: '#a9714b', hairStyle: 'court', hair: '#1c1a1a', top: 'tshirt', topColor: '#2a6f6a', bottom: 'long', bottomColor: '#1e2a3a', shoes: '#efe9da', hat: null, glasses: null, back: null, neck: null }), B = g.userData.B;
-    const band = put(B.head, mesh(new THREE.TorusGeometry(0.092, 0.012, 8, 24), mat('#c0583f', 0.7)), 0, 0.04, 0, Math.PI / 2, 0, 0);
-    put(B.chest, box(0.1, 0.04, 0.01, mat('#efe9da', 0.8)), 0, 0.2, -0.17);
+    const g = buildRunner({ skin: '#a9714b', hairStyle: 'court', hair: '#1c1a1a', top: 'tshirt', topColor: '#d9d4c6', bottom: 'short', bottomColor: '#2a5f9a', shoes: '#c0583f', hat: null, glasses: null, back: null, neck: null }), B = g.userData.B;
+    const red = mat('#c0583f', 0.7), white = mat('#f4f1ea', 0.9), dark = mat('#1c1a1a', 0.7);
+    put(B.head, mesh(new THREE.TorusGeometry(0.094, 0.016, 8, 24), red), 0, 0.045, 0, Math.PI / 2, 0, 0.05);
+    put(B.chest, box(0.2, 0.2, 0.012, white), 0, 0.2, -0.178); put(B.chest, box(0.02, 0.1, 0.014, dark), -0.03, 0.2, -0.186); put(B.chest, box(0.09, 0.02, 0.014, dark), 0.02, 0.24, -0.186); put(B.chest, box(0.09, 0.02, 0.014, dark), 0.02, 0.16, -0.186);
+    put(B.chest, box(0.4, 0.05, 0.3, red), 0, 0.36, 0); /* épaules : bretelles du débardeur */
+    for (const k of ['L', 'R']) { put(B['el' + k], mesh(new THREE.TorusGeometry(0.04, 0.02, 8, 16), white), 0, -0.22, 0, Math.PI / 2, 0, 0); put(B['sh' + k], mesh(new THREE.TorusGeometry(0.05, 0.016, 8, 16), red), 0, -0.1, 0, Math.PI / 2, 0, 0); }
     return tag(g, 'runner', 1.05, 1.35);
   }
 

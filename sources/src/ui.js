@@ -1,4 +1,4 @@
-/* Projet : La fuite d’Abel  ·  Version : 1.8.0  ·  Date : 17/11/2026
+/* Projet : La fuite d’Abel  ·  Version : 1.9.0  ·  Date : 17/11/2026
    Auteur : Tom Rougeaud  ·  Licence : CC BY-NC 4.0
    Réalisé avec l’aide de l’IA : Claude Sonnet 5.5 (Anthropic) */
 import { createEngine, LEVELS, SPEEDS, POWERS } from './engine.js';
@@ -118,7 +118,7 @@ function drawMap() {
   DATA.niveaux.forEach((n, i) => {
     const ok = owns(i), d = document.createElement('button'); d.className = 'lv' + (i === selLevel ? ' sel' : '') + (ok ? '' : ' lock'); d.setAttribute('aria-label', n.nom + (ok ? '' : ' (à débloquer, ' + n.p + ' pièces)'));
     d.innerHTML = `<span class="lvi t${i % 5}">${ic(n.icon)}</span><span class="nm">${n.nom}</span><span class="stars">${[0, 1, 2].map(k => ic(k < save.stars[i] ? 'star' : 'starO')).join('')}</span>${n.var ? `<span class="vb">${ic(VAR_ICON[n.var])}</span>` : ''}${ok ? '' : `<span class="lk">${ic('lock')}</span><span class="pr">${ic('coin')}<b>${n.p}</b></span>`}`;
-    d.addEventListener('click', () => { if (!ok) { SFX.click(); goShop(0, i); return; } SFX.click(); selLevel = i; E.menu(LEVELS[i].theme); drawMap(); });
+    d.addEventListener('click', () => { if (!ok) { SFX.click(); goShop(LV_TAB, i); return; } SFX.click(); selLevel = i; E.menu(LEVELS[i].theme); drawMap(); });
     box.appendChild(d);
   });
   const sel = box.children[selLevel]; if (sel && sel.scrollIntoView) { try { box.scrollLeft = Math.max(0, sel.offsetLeft - box.clientWidth / 2 + sel.offsetWidth / 2); } catch (e) { } }
@@ -165,7 +165,7 @@ function showResult(r) {
   if (r.win && nv) {
     if (owns(nxt)) wide('', `${ic('next')}<span>Niveau suivant : ${nv.nom}</span>`, () => startGame(nxt, r.speed));
     else if (save.coins >= nv.p) wide('', `${ic('lock')}<span>Débloquer ${nv.nom}</span><b>${ic('coin')}${nv.p}</b>`, () => { save.coins -= nv.p; save.levels.push(nxt); save.levels.sort((a, b) => a - b); persist(); SFX.power(); startGame(nxt, r.speed); });
-    else { wide('no', `${ic('lock')}<span>${nv.nom} : il te manque ${nv.p - save.coins}</span><b>${ic('coin')}</b>`, () => goShop(0, nxt)); }
+    else { wide('no', `${ic('lock')}<span>${nv.nom} : il te manque ${nv.p - save.coins}</span><b>${ic('coin')}</b>`, () => goShop(LV_TAB, nxt)); }
   } else if (r.win) wide('sec', `${ic('star')}<span>Tous les niveaux sont finis !</span>`, () => { });
   if (r.win && r.stars >= 2 && r.speed < 2) wide('sec', `${ic(['rabbit', 'cheetah'][r.speed])}<span>Rejouer plus vite</span>`, () => { save.speed = r.speed + 1; persist(); startGame(r.level, r.speed + 1); });
   row.appendChild(btn(r.win ? '' : 'big', 'replay', 'rejouer', () => startGame(r.level, r.speed), 'Rejouer'));
@@ -177,7 +177,9 @@ function showResult(r) {
 /* boutique */
 let shopCat = 0, pend = null;
 /* onglet 0 = niveaux à débloquer ; les suivants = tenue et poursuivant */
-const CATS = [{ id: 'niveaux', icon: 'map', lv: true, focus: 'level', yaw: 0 }, ...DATA.categories];
+/* onglets de la boutique : poursuivants en premier, puis niveaux, puis tenue */
+const CH_CAT = DATA.categories.find(c => c.id === 'poursuivant'), LV_TAB = 1;
+const CATS = [CH_CAT, { id: 'niveaux', icon: 'map', lv: true, focus: 'level', yaw: 0 }, ...DATA.categories.filter(c => c !== CH_CAT)];
 function goShop(cat = 0, lvl = null) {
   shopCat = cat; pend = lvl !== null && !owns(lvl) ? { cat: 'niveaux', idx: lvl } : null;
   E.shopMode(pend ? LEVELS[lvl].theme : themeHome); applyLook(null); drawShop(); show('shop'); refreshCoins();
@@ -208,8 +210,8 @@ function drawShop() {
   });
   else c.items.forEach((it, i) => {
     const owned = save.owned.includes(c.id + ':' + i), eq = save.eq[c.id] === i, d = document.createElement('button');
-    d.className = 'item' + (eq && !pend ? ' on' : '') + (pend && pend.idx === i ? ' pv' : '') + (owned ? '' : ' buy');
-    d.innerHTML = `<span class="sw">${swatch(c, it)}</span>${owned ? (eq ? `<span class="ok">${ic('check')}</span>` : '') : `<span class="pr">${ic('coin')}<b>${it.p}</b></span>`}`;
+    d.className = 'item' + (it.nom ? ' named' : '') + (eq && !pend ? ' on' : '') + (pend && pend.idx === i ? ' pv' : '') + (owned ? '' : ' buy');
+    d.innerHTML = `<span class="sw">${swatch(c, it)}</span>${it.nom ? `<span class="nom">${it.nom}</span>` : ''}${owned ? (eq ? `<span class="ok">${ic('check')}</span>` : '') : `<span class="pr">${ic('coin')}<b>${it.p}</b></span>`}`;
     d.addEventListener('click', () => {
       SFX.click();
       if (owned) { save.eq[c.id] = i; pend = null; persist(); applyLook(null); drawShop(); }

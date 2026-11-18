@@ -1,4 +1,4 @@
-/* Projet : La fuite d’Abel  ·  Version : 1.8.0  ·  Date : 17/11/2026
+/* Projet : La fuite d’Abel  ·  Version : 1.9.0  ·  Date : 17/11/2026
    Auteur : Tom Rougeaud  ·  Licence : CC BY-NC 4.0
    Réalisé avec l’aide de l’IA : Claude Sonnet 5.5 (Anthropic) */
 import * as THREE from 'three';
@@ -13,8 +13,8 @@ export const LANE = 3.2, LX = [-LANE, 0, LANE];
 /* vitesse de défilement (m/s) : seul le décor accélère, pas la cadence des jambes */
 export const SPEEDS = [32, 43, 55];
 /* 15 niveaux : 5 décors × (jour, soir, nuit). Plus on avance, plus c’est long, rapide et chargé. */
-/* 50 niveaux de 10 000 m : décor = 5 lieux × 3 ambiances (jour, soir, nuit), difficulté et vitesse croissantes */
-export const LEVELS = Array.from({ length: 50 }, (_, i) => ({ theme: (i % 5) + 5 * (Math.floor(i / 5) % 3), len: 10000, diff: 0.4 + 0.7 * i / 49, vmul: 1 + 0.003 * i, seed: 11 * (i + 1) }));
+/* 50 niveaux de 5 000 m : décor = 5 lieux × 3 ambiances (jour, soir, nuit), difficulté et vitesse croissantes */
+export const LEVELS = Array.from({ length: 50 }, (_, i) => ({ theme: (i % 5) + 5 * (Math.floor(i / 5) % 3), len: 5000, diff: 0.4 + 0.7 * i / 49, vmul: 1 + 0.003 * i, seed: 11 * (i + 1) }));
 export const POWERS = { aimant: { icon: 'magnet', bg: '#c0392b', dur: 9 }, bouclier: { icon: 'shield', bg: '#2f7fd0', dur: 14 }, envol: { icon: 'balloon', bg: '#d9578a', dur: 5.5 }, x2: { icon: 'x2', bg: '#7a4fb8', dur: 10 }, ralenti: { icon: 'snail', bg: '#3a8f7a', dur: 6 }, bottes: { icon: 'rabbit', bg: '#d98a2b', dur: 12 }, repousse: { icon: 'wind', bg: '#4a7fa8', dur: 0 }, pluie: { icon: 'sparkle', bg: '#b88a1c', dur: 8 }, coeur: { icon: 'heart', bg: '#d1344a', dur: 0 } };
 const SIZE = { sedan: [4.8, 1.9, 1.7], pickup: [5.6, 2.05, 2.1], van: [5.2, 2.1, 2.45], truck: [17.6, 2.55, 4.0], bus: [11.5, 2.5, 3.0], busramp: [18.5, 2.5, 3.0], barrier: [0.7, 2.6, 0.9], beam: [0.6, 3.3, 2.0], crate: [1.8, 1.8, 1.5], barrel: [1.6, 1.6, 1.5] };
 const RAMP = 7;
@@ -44,15 +44,15 @@ export function genLevel(li, si) {
     let kind;
     const q = r();
     if (rows === 0) kind = 'barrier'; else if (rows === 1) kind = 'beam';
-    else if (q < 0.16 - 0.1 * diff) kind = 'free'; else if (q < 0.42) kind = 'barrier'; else if (q < 0.62) kind = 'beam'; else kind = rows >= 3 ? 'busramp' : 'barrier';
+    else if (q < 0.06 - 0.04 * diff) kind = 'free'; else if (q < 0.46) kind = 'barrier'; else if (q < 0.64) kind = 'beam'; else kind = rows >= 3 ? 'busramp' : 'barrier';
     if (combo) kind = r() < 0.5 ? 'barrier' : 'beam';
     if (boundary) kind = 'free';
     /* slalom : 3 à 5 rangées rapprochées qui obligent à changer de voie à chaque fois (toutes les autres voies sont barrées) */
     if (!boundary && slal === 0 && rows > 4 && r() < 0.1 + 0.12 * diff) slal = 3 + ((r() * 3) | 0);
     const inSl = slal > 0 && !boundary; if (inSl) { kind = 'free'; combo = false; }
-    const pullNow = rows >= 3 && !inSl && !boundary && !combo && r() < 0.45 + 0.25 * diff; /* voiture qui sort dans TA voie */
+    const pullNow = rows >= 3 && !inSl && !boundary && !combo && r() < 0.6 + 0.3 * diff; /* voiture qui sort dans TA voie */
     /* rangée « saut + décalage » : on saute (ou glisse), puis un véhicule surgit dans la même voie : il faut passer sur la voisine presque en même temps */
-    const hopNow = rows > 5 && !inSl && !boundary && !combo && !pullNow && r() < 0.07 + 0.1 * diff; if (hopNow) kind = r() < 0.5 ? 'barrier' : 'beam';
+    const hopNow = rows > 5 && !inSl && !boundary && !combo && !pullNow && r() < 0.18 + 0.15 * diff; if (hopNow) kind = r() < 0.5 ? 'barrier' : 'beam';
     const opts = [safe - 1, safe + 1].filter(l => l >= 0 && l <= 2);
     const newSafe = rows < 2 || boundary ? 1 : (combo ? safe : inSl || pullNow || r() < 0.88 ? opts[(r() * opts.length) | 0] : safe); /* on change presque toujours de voie */
     const hopOpts = [newSafe - 1, newSafe + 1].filter(l => l >= 0 && l <= 2), hopT = hopNow ? hopOpts[(r() * hopOpts.length) | 0] : -1; /* voie d’esquive */
@@ -67,26 +67,38 @@ export function genLevel(li, si) {
     const g0 = prevEnd + 2, g1 = d - 3;
     for (let dd = g0; dd <= g1; dd += 3) { const u = g1 > g0 ? (dd - g0) / (g1 - g0) : 1; coin(dd, LX[prevSafe] + (LX[newSafe] - LX[prevSafe]) * sm(0.15, 0.85, u), 1.0); }
     /* dangers de la zone : voiture qui sort de son stationnement, objet qui tombe */
+    let lateStart = -1; /* début de la voiture qui sort dans la voie à quitter */
     if (hz && !hz.none && g1 - g0 >= 13) {
       const hl = hz.early ? prevSafe : hOuter[(r() * hOuter.length) | 0], span = g1 - g0, sd = hl === 1 ? -(Math.sign(LX[newSafe]) || 1) : Math.sign(LX[hl]); /* sortie du côté opposé à la voie suivante */
       if (hz.pull) {
         const k = pv2(), len = SIZE[k][0], d0h = hz.early ? prevEnd + hvf + r() * 0.15 * hvf : g0 + 1 + r() * Math.max(0, span - len - 3);
         obs.push({ kind: k, lane: hl, x: sd * 5.7, xPark: sd * 5.7, xLane: LX[hl], d0: d0h, d1: d0h + len, len, hw: SIZE[k][1] / 2, top: SIZE[k][2], type: 'block', variant: (r() * 6) | 0, dyn: 'pull', p: 0, on: false });
-        haz.push({ d0: d0h, d1: d0h + len, x: LX[hl] });
+        haz.push({ d0: d0h, d1: d0h + len, x: LX[hl] }); if (hz.early) lateStart = d0h;
       } else {
         const k = r() < 0.5 ? 'crate' : 'barrel', len = SIZE[k][0], d0h = hz.early ? prevEnd + hvf + r() * 0.15 * hvf : g0 + 2 + r() * Math.max(0, span - 6);
         obs.push({ kind: k, lane: hl, x: LX[hl], d0: d0h, d1: d0h + len, len, hw: SIZE[k][1] / 2, top: 1.5, type: 'block', variant: (r() * 3) | 0, dyn: 'drop', p: 0, on: false, landed: false, fy: 9 });
         haz.push({ d0: d0h, d1: d0h + len, x: LX[hl] });
       }
     }
-    /* circulation de la zone : véhicules dans les voies que le trajet n’emprunte pas */
-    { const lo = Math.min(prevSafe, newSafe), hi = Math.max(prevSafe, newSafe), hzl = hz && !hz.none ? (hz.early ? prevSafe : -2) : -2;
-      for (let l = 0; l < 3; l++) { if (l >= lo && l <= hi) continue;
-        /* jusqu’à deux véhicules par voie libre : du trafic dense, la voie du trajet reste dégagée */
-        for (let n = 0; n < 2; n++) { if (g1 - g0 < 12 || r() > (n ? 0.5 + 0.3 * diff : 0.88 + 0.1 * diff)) continue;
-          const k = pv2(), len = SIZE[k][0], d0z = g0 + 1 + r() * Math.max(0, g1 - g0 - len - 2);
-          if (obs.some(o => o.lane === l && o.d1 > d0z - 2 && o.d0 < d0z + len + 2)) continue;
-          obs.push({ kind: k, lane: l, x: LX[l], d0: d0z, d1: d0z + len, len, hw: SIZE[k][1] / 2, top: SIZE[k][2], type: 'block', variant: (r() * 6) | 0 }); haz.push({ d0: d0z, d1: d0z + len, x: LX[l] }); } } }
+    /* zone de dégagement : circulation continue, une seule voie libre presque en permanence.
+       - les voies que le trajet n’emprunte pas sont remplies de véhicules d’un bout à l’autre ;
+       - si l’on change de voie : la nouvelle est barrée au début, l’ancienne à la fin, avec un créneau de ≈ 0,4 s au milieu pour passer. */
+    const tile = (lane, a0, b0) => { /* aligne des véhicules (petits écarts) entre a0 et b0 */
+      let x = a0 + r() * 0.8;
+      while (true) { const k = pv2(), len = SIZE[k][0]; if (x + len > b0 + 0.5) break; addObs(k, lane, x); haz.push({ d0: x, d1: x + len, x: LX[lane] }); x += len + 1.4 + r() * 2.2; }
+    };
+    let swPt = g0; /* point où le trajet change de voie (robot de test) */
+    if (g1 - g0 >= 6 && !boundary) {
+      const lo = Math.min(prevSafe, newSafe), hi = Math.max(prevSafe, newSafe);
+      for (let l = 0; l < 3; l++) { if (l >= lo && l <= hi) continue; tile(l, g0, g1); }
+      if (prevSafe === newSafe) { for (let l = 0; l < 3; l++) if (l !== newSafe && (l < lo || l > hi)) { /* déjà rempli ci-dessus */ } }
+      else {
+        const W = 0.3 * hvf, lateAt = lateStart > 0 ? lateStart : g1 - 6, swA = g0 + Math.max(0, (Math.min(lateAt, g1) - g0 - W) * 0.5), swB = swA + W;
+        tile(newSafe, g0, swA);
+        if (lateStart < 0) tile(prevSafe, swB, g1);
+        swPt = (swA + swB) / 2;
+      }
+    }
     let rowLen = 1;
     const sl = kind === 'free' ? 0 : addObs(kind, newSafe, d);
     if (kind === 'free') rowLen = 10; else rowLen = sl;
@@ -112,9 +124,9 @@ export function genLevel(li, si) {
       else if (q2 < Math.min(0.99, pBlock + 0.25)) { addObs(r() < 0.5 ? 'barrier' : 'beam', lane, d + r() * 2); }
     }
     if (hopNow) { /* le véhicule surgit dans la voie du saut, juste après l’obstacle */
-      const kv = r() < 0.5 ? 'van' : 'truck', vf2 = v * (1 + 0.25 * Math.min(1, d / L.len)), dv = d + 0.72 * vf2, e = addObs(kv, newSafe, dv);
-      safes.push({ g0, lane: newSafe, from: prevSafe, end: d + 6 }); rowLen = Math.max(rowLen, e + 0.72 * vf2); safes.push({ g0: d + 7, lane: hopT, from: newSafe, end: d + rowLen });
-    } else safes.push({ g0, lane: newSafe, from: prevSafe, end: d + rowLen });
+      const kv = r() < 0.5 ? 'van' : 'truck', vf2 = v * (1 + 0.25 * Math.min(1, d / L.len)), dv = d + 0.55 * vf2, e = addObs(kv, newSafe, dv);
+      safes.push({ g0: swPt, lane: newSafe, from: prevSafe, end: d + 6 }); rowLen = Math.max(rowLen, e + 0.55 * vf2); safes.push({ g0: d + 7, lane: hopT, from: newSafe, end: d + rowLen });
+    } else safes.push({ g0: swPt, lane: newSafe, from: prevSafe, end: d + rowLen });
     rows++; prevSafe = endLane; safe = endLane; prevEnd = d + rowLen;
     // bonus
     if (d - lastPick > 330 && rows > 3) { /* bonus plus rares ; cœur et ballons très rares */
