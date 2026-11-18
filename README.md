@@ -25,4 +25,5 @@ Application web installable (PWA) : bouton d’installation dans le jeu ; sur iP
 Création : Tom Rougeaud, licence CC BY-NC 4.0. Moteur 3D : [three.js](https://threejs.org) (licence MIT), embarqué dans la page.
 
 - Boutique : 11 danses du poursuivant (dab, 6-7, la vague, MJ, toupie sur la tête, twerk, grand écart, battle d’aura, doubles saltos, poirier) ; l’icône de l’appli est rafraîchie à chaque mise à jour (adresses versionnées).
+- Boutique : flèches de défilement ; danses (dab, twerk, grand écart, poirier) retravaillées, personnage toujours posé sur la route.
 - Bonus à icônes ; un cœur ou un parachute tous les 100 pièces ; scènes de capture de 10 s, une chorégraphie par poursuivant (appui = passer) ; sur PC : flèches pour naviguer, Entrée pour valider ; poursuivants de 1 500 à 3 000 pièces.
