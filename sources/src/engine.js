@@ -1,4 +1,4 @@
-/* Projet : La fuite d’Abel  ·  Version : 1.10.0  ·  Date : 18/11/2026
+/* Projet : La fuite d’Abel  ·  Version : 1.10.1  ·  Date : 18/11/2026
    Auteur : Tom Rougeaud  ·  Licence : CC BY-NC 4.0
    Réalisé avec l’aide de l’IA : Claude Sonnet 5.5 (Anthropic) */
 import * as THREE from 'three';
@@ -220,7 +220,7 @@ export function createEngine(canvas, cb = {}) {
     clearRun(); S.mode = 'play'; S.paused = false; platform.visible = false;
     lev = genLevel(li, si); lev.li = li; lev.totalCoins = lev.coins.length;
     S.lastZ = 0; S.themeIdx === lev.theme && S.scen && (S.scen.dispose(), S.scen = null, S.themeIdx = -1); setTheme(lev.theme);
-    Object.assign(P, { d: 0, x: 0, y: 0, vy: 0, lane: 1, grounded: true, coyote: 0, jumpBuf: 0, slide: 0, inv: 0, hitT: 9, hearts: [3, 2, 1][si], maxH: [3, 2, 1][si], coins: 0, phi: 0, fly: 0, shield: 0, magnet: 0, x2: 0, slow: 0, boots: 0, rain: 0, lost: 0, tired: 0, speedMul: 1, state: 'run', endT: 0, camShake: 0, flash: 0, vx: 0, airT: 0, jumped: false, land: 0, sk: 0, jk: 0, ended: false });
+    Object.assign(P, { d: 0, x: 0, y: 0, vy: 0, lane: 1, grounded: true, coyote: 0, jumpBuf: 0, slide: 0, inv: 0, hitT: 9, hearts: [3, 3, 2][si], maxH: [3, 3, 2][si], coins: 0, phi: 0, fly: 0, shield: 0, magnet: 0, x2: 0, slow: 0, boots: 0, rain: 0, lost: 0, tired: 0, speedMul: 1, state: 'run', endT: 0, camShake: 0, flash: 0, vx: 0, airT: 0, jumped: false, land: 0, sk: 0, jk: 0, ended: false });
     Object.assign(C, { gap: 14, x: 1.2, phi: 0, nextVisit: 8 + Math.random() * 4, vphase: 0, vt: 0, near: 0 });
     const cm = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.34, 0.34, 0.07, 28), coinMaterials(), 220); cm.frustumCulled = false; cm.count = 0; cm.castShadow = false; scene.add(cm); coinMesh = cm;
     // arche d’arrivée
