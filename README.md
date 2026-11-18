@@ -24,4 +24,4 @@ Application web installable (PWA) : bouton d’installation dans le jeu ; sur iP
 ## Licence
 Création : Tom Rougeaud, licence CC BY-NC 4.0. Moteur 3D : [three.js](https://threejs.org) (licence MIT), embarqué dans la page.
 
-- Bonus à icônes ; un cœur ou un parachute tous les 100 pièces ; scènes de capture de 10 s, une chorégraphie par poursuivant (appui = passer) ; poursuivants de 1 500 à 3 000 pièces.
+- Bonus à icônes ; un cœur ou un parachute tous les 100 pièces ; scènes de capture de 10 s, une chorégraphie par poursuivant (appui = passer) ; sur PC : flèches pour naviguer, Entrée pour valider ; poursuivants de 1 500 à 3 000 pièces.
