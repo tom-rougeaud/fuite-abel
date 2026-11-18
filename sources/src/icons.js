@@ -1,4 +1,4 @@
-/* Projet : La fuite d’Abel  ·  Version : 1.10.1  ·  Date : 18/11/2026
+/* Projet : La fuite d’Abel  ·  Version : 1.11.0  ·  Date : 18/11/2026
    Auteur : Tom Rougeaud  ·  Licence : CC BY-NC 4.0
    Réalisé avec l’aide de l’IA : Claude Sonnet 5.5 (Anthropic) */
 import * as THREE from 'three';
@@ -24,6 +24,16 @@ const I = {
   squirrel: `<path ${S} d="M8 20c-2-3 0-6 3-6 2 0 3-2 3-4 0-3 3-5 5-3-1 1-1 2 0 3-3 0-3 4-1 6 1 2 0 4-3 4z"/><circle cx="14.6" cy="8.4" r="0.8" fill="currentColor"/>`,
   santa: `<path ${S} d="M5 11c0-5 5-8 9-7l-2 4 5 3z"/><circle cx="15" cy="4" r="1.3" fill="currentColor"/><path ${S} d="M7 13c0 6 3 8 5 8s5-2 5-8"/>`,
   witch: `<path ${S} d="M12 3l4 12H8z"/><path ${S} d="M4 17h16"/><path ${S} d="M7 20h10"/>`,
+  chef: `<path ${S} d="M7 11a3.5 3.5 0 011-6.5 4 4 0 018 0A3.5 3.5 0 0117 11z"/><path ${S} d="M7 11v8h10v-8"/>`,
+  pirate: `<path ${S} d="M5 11a7 7 0 0114 0v3H5z"/><circle cx="9.5" cy="10.5" r="1.4" fill="currentColor"/><circle cx="14.5" cy="10.5" r="1.4" fill="currentColor"/><path ${S} d="M9 17l6 3M15 17l-6 3"/>`,
+  ninja: `<path ${S} d="M5 10a7 6 0 0114 0v6a7 5 0 01-14 0z"/><path ${S} d="M5 11h14v3H5z"/><path ${S} d="M18 6l3-2M18 8l3 1"/>`,
+  viking: `<path ${S} d="M6 15a6 6 0 0112 0z"/><path ${S} d="M6 10C3 10 3 6 4 5M18 10c3 0 3-4 2-5"/><path ${S} d="M12 15v4"/>`,
+  sherif: `<path ${S} d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.5 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/>`,
+  mummy: `<circle ${S} cx="12" cy="9" r="5"/><path ${S} d="M7.5 8h9M7 11h10M9 21l1-6M15 21l-1-6"/>`,
+  vampire: `<path ${S} d="M4 5l8 6 8-6v8a8 8 0 01-16 0z"/><path ${S} d="M10 14v3M14 14v3"/>`,
+  alien: `<path ${S} d="M12 3c5 0 8 4 7 9-1 4-4 8-7 8s-6-4-7-8c-1-5 2-9 7-9z"/><path ${S} d="M7.5 11c2 0 3 1.5 3.5 3M16.5 11c-2 0-3 1.5-3.5 3"/>`,
+  knight: `<path ${S} d="M6 20V9a6 6 0 0112 0v11z"/><path ${S} d="M6 11h12M12 11v4"/>`,
+  dino: `<path ${S} d="M3 16c0-5 4-9 9-9 3 0 5 1 6 3l3 1-3 2c0 3-3 5-6 5H6z"/><circle cx="15" cy="10" r="1" fill="currentColor"/><path ${S} d="M7 8l1-2 2 2"/>`,
   heart: `<path ${F} d="M12 21s-8-5.2-8-11a4.6 4.6 0 0 1 8-3 4.6 4.6 0 0 1 8 3c0 5.8-8 11-8 11z"/>`,
   heartO: `<path ${S} d="M12 21s-8-5.2-8-11a4.6 4.6 0 0 1 8-3 4.6 4.6 0 0 1 8 3c0 5.8-8 11-8 11z"/>`,
   coin: `<circle cx="12" cy="12" r="9" fill="#f2c14e" stroke="#b9801b" stroke-width="2"/><circle cx="12" cy="12" r="5.4" fill="none" stroke="#b9801b" stroke-width="1.6"/><path d="M12 9v6M10.4 10.4h2.3a1.2 1.2 0 0 1 0 2.4h-1.4a1.2 1.2 0 0 0 0 2.4h2.3" stroke="#b9801b" stroke-width="1.3" fill="none" stroke-linecap="round"/>`,

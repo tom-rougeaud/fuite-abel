@@ -1,4 +1,4 @@
-/* Projet : La fuite d’Abel  ·  Version : 1.10.1  ·  Date : 18/11/2026
+/* Projet : La fuite d’Abel  ·  Version : 1.11.0  ·  Date : 18/11/2026
    Auteur : Tom Rougeaud  ·  Licence : CC BY-NC 4.0
    Réalisé avec l’aide de l’IA : Claude Sonnet 5.5 (Anthropic) */
 import * as THREE from 'three';
@@ -354,7 +354,7 @@ export function poseRunner(R, st) {
 
 /* ---------- chien poursuivant ---------- */
 export function buildDog(opts = {}) {
-  const fur = mat(opts.fur || '#b9854f', 0.9), dark = mat(shadeHex(opts.fur || '#b9854f', 0.62), 0.9), light = mat('#efe3cf', 0.9), nose = mat('#1b1b1f', 0.4);
+  const fur = mat(opts.fur || '#b9854f', 0.9), dark = mat(shadeHex(opts.fur || '#b9854f', 0.62), 0.9), light = mat(opts.light || '#efe3cf', 0.9), nose = mat('#1b1b1f', 0.4); /* light : couleur du ventre, du museau et des pattes */
   const root = new THREE.Group(), B = {};
   B.body = grp(0, 0.62, 0); root.add(B.body);
   const torso = ell(0.2, 0.2, 0.46, fur, 20); B.body.add(torso);
@@ -365,7 +365,7 @@ export function buildDog(opts = {}) {
   B.head.add(ell(0.115, 0.105, 0.12, fur, 16));
   const snout = ell(0.07, 0.06, 0.1, light, 12); snout.position.set(0, -0.03, -0.14); B.head.add(snout);
   const nz = ell(0.03, 0.025, 0.025, nose, 10); nz.position.set(0, -0.012, -0.235); B.head.add(nz);
-  const tongue = ell(0.025, 0.008, 0.05, mat('#d9566a', 0.6), 8); tongue.position.set(0, -0.07, -0.19); B.head.add(tongue);
+  if (opts.tongue !== false) { const tongue = ell(0.025, 0.008, 0.05, mat('#d9566a', 0.6), 8); tongue.position.set(0, -0.07, -0.19); B.head.add(tongue); }
   B.ears = [];
   for (const s of [-1, 1]) {
     const eg = grp(s * 0.095, 0.075, 0.02); B.head.add(eg); const e = ell(0.04, 0.09, 0.05, dark, 10); e.position.y = -0.06; eg.add(e); B.ears.push({ g: eg, s });
