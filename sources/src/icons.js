@@ -1,4 +1,4 @@
-/* Projet : La fuite d’Abel  ·  Version : 1.7.0  ·  Date : 17/11/2026
+/* Projet : La fuite d’Abel  ·  Version : 1.8.0  ·  Date : 17/11/2026
    Auteur : Tom Rougeaud  ·  Licence : CC BY-NC 4.0
    Réalisé avec l’aide de l’IA : Claude Sonnet 5.5 (Anthropic) */
 import * as THREE from 'three';
@@ -15,6 +15,15 @@ function gearPath() {
 }
 const I = {
   brokenheart: `<g transform="translate(-0.9 0.5) rotate(-7 12 14)"><path ${F} d="M12 7A4.6 4.6 0 0 0 4 10C4 15.8 12 21 12 21L11 17L13 13.2L10.6 11Z"/></g><g transform="translate(0.9 0.5) rotate(7 12 14)"><path ${F} d="M12 7A4.6 4.6 0 0 1 20 10C20 15.8 12 21 12 21L11 17L13 13.2L10.6 11Z"/></g>`,
+  wind: `<path ${S} stroke-width="2.4" d="M3 8h11a3 3 0 1 0-3-3M3 12h16a3 3 0 1 1-3 3M3 17h8"/>`,
+  drone: `<ellipse cx="12" cy="13" rx="4" ry="2.4" fill="currentColor"/><path ${S} stroke-width="1.8" d="M5 7h5M14 7h5M9 11L7 8M15 11l2-3"/><circle cx="12" cy="13" r="1" fill="#fff"/>`,
+  mascot: `<circle cx="12" cy="13" r="7.5" ${S}/><circle cx="6.5" cy="6.5" r="2.4" ${S}/><circle cx="17.5" cy="6.5" r="2.4" ${S}/><circle cx="9.3" cy="12" r="1" fill="currentColor"/><circle cx="14.7" cy="12" r="1" fill="currentColor"/><path ${S} d="M10 16q2 1.6 4 0"/>`,
+  ghost: `<path ${S} d="M6 20V11a6 6 0 0 1 12 0v9l-2-2-2 2-2-2-2 2-2-2z"/><circle cx="10" cy="11" r="1" fill="currentColor"/><circle cx="14" cy="11" r="1" fill="currentColor"/>`,
+  bull: `<path ${S} d="M4 5c1 4 3 5 5 5M20 5c-1 4-3 5-5 5"/><path ${S} d="M8 10h8l1 6a5 5 0 0 1-10 0z"/><circle cx="10" cy="14" r="0.9" fill="currentColor"/><circle cx="14" cy="14" r="0.9" fill="currentColor"/>`,
+  golem: `<rect x="6" y="5" width="12" height="14" rx="2" ${S}/><rect x="8.5" y="9" width="2.4" height="2.4" fill="currentColor"/><rect x="13.1" y="9" width="2.4" height="2.4" fill="currentColor"/><path ${S} d="M9 15.5h6"/>`,
+  squirrel: `<path ${S} d="M8 20c-2-3 0-6 3-6 2 0 3-2 3-4 0-3 3-5 5-3-1 1-1 2 0 3-3 0-3 4-1 6 1 2 0 4-3 4z"/><circle cx="14.6" cy="8.4" r="0.8" fill="currentColor"/>`,
+  santa: `<path ${S} d="M5 11c0-5 5-8 9-7l-2 4 5 3z"/><circle cx="15" cy="4" r="1.3" fill="currentColor"/><path ${S} d="M7 13c0 6 3 8 5 8s5-2 5-8"/>`,
+  witch: `<path ${S} d="M12 3l4 12H8z"/><path ${S} d="M4 17h16"/><path ${S} d="M7 20h10"/>`,
   heart: `<path ${F} d="M12 21s-8-5.2-8-11a4.6 4.6 0 0 1 8-3 4.6 4.6 0 0 1 8 3c0 5.8-8 11-8 11z"/>`,
   heartO: `<path ${S} d="M12 21s-8-5.2-8-11a4.6 4.6 0 0 1 8-3 4.6 4.6 0 0 1 8 3c0 5.8-8 11-8 11z"/>`,
   coin: `<circle cx="12" cy="12" r="9" fill="#f2c14e" stroke="#b9801b" stroke-width="2"/><circle cx="12" cy="12" r="5.4" fill="none" stroke="#b9801b" stroke-width="1.6"/><path d="M12 9v6M10.4 10.4h2.3a1.2 1.2 0 0 1 0 2.4h-1.4a1.2 1.2 0 0 0 0 2.4h2.3" stroke="#b9801b" stroke-width="1.3" fill="none" stroke-linecap="round"/>`,

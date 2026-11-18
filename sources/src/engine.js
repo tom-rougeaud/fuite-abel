@@ -1,4 +1,4 @@
-/* Projet : La fuite d’Abel  ·  Version : 1.7.0  ·  Date : 17/11/2026
+/* Projet : La fuite d’Abel  ·  Version : 1.8.0  ·  Date : 17/11/2026
    Auteur : Tom Rougeaud  ·  Licence : CC BY-NC 4.0
    Réalisé avec l’aide de l’IA : Claude Sonnet 5.5 (Anthropic) */
 import * as THREE from 'three';
@@ -7,6 +7,7 @@ import { proto } from './vehicles.js';
 import { THEMES, Scenery, applyLook } from './themes.js';
 import { coinMaterials, envMap } from './textures.js';
 import { badgeTexture } from './icons.js';
+import { buildChaser, poseDrone } from './chasers.js';
 
 export const LANE = 3.2, LX = [-LANE, 0, LANE];
 /* vitesse de défilement (m/s) : seul le décor accélère, pas la cadence des jambes */
@@ -14,7 +15,7 @@ export const SPEEDS = [32, 43, 55];
 /* 15 niveaux : 5 décors × (jour, soir, nuit). Plus on avance, plus c’est long, rapide et chargé. */
 /* 50 niveaux de 10 000 m : décor = 5 lieux × 3 ambiances (jour, soir, nuit), difficulté et vitesse croissantes */
 export const LEVELS = Array.from({ length: 50 }, (_, i) => ({ theme: (i % 5) + 5 * (Math.floor(i / 5) % 3), len: 10000, diff: 0.4 + 0.7 * i / 49, vmul: 1 + 0.003 * i, seed: 11 * (i + 1) }));
-export const POWERS = { aimant: { icon: 'magnet', bg: '#c0392b', dur: 9 }, bouclier: { icon: 'shield', bg: '#2f7fd0', dur: 14 }, envol: { icon: 'balloon', bg: '#d9578a', dur: 5.5 }, x2: { icon: 'x2', bg: '#7a4fb8', dur: 10 }, coeur: { icon: 'heart', bg: '#d1344a', dur: 0 } };
+export const POWERS = { aimant: { icon: 'magnet', bg: '#c0392b', dur: 9 }, bouclier: { icon: 'shield', bg: '#2f7fd0', dur: 14 }, envol: { icon: 'balloon', bg: '#d9578a', dur: 5.5 }, x2: { icon: 'x2', bg: '#7a4fb8', dur: 10 }, ralenti: { icon: 'snail', bg: '#3a8f7a', dur: 6 }, bottes: { icon: 'rabbit', bg: '#d98a2b', dur: 12 }, repousse: { icon: 'wind', bg: '#4a7fa8', dur: 0 }, pluie: { icon: 'sparkle', bg: '#b88a1c', dur: 8 }, coeur: { icon: 'heart', bg: '#d1344a', dur: 0 } };
 const SIZE = { sedan: [4.8, 1.9, 1.7], pickup: [5.6, 2.05, 2.1], van: [5.2, 2.1, 2.45], truck: [17.6, 2.55, 4.0], bus: [11.5, 2.5, 3.0], busramp: [18.5, 2.5, 3.0], barrier: [0.7, 2.6, 0.9], beam: [0.6, 3.3, 2.0], crate: [1.8, 1.8, 1.5], barrel: [1.6, 1.6, 1.5] };
 const RAMP = 7;
 
@@ -31,7 +32,7 @@ export function genLevel(li, si) {
     return len;
   };
   const coin = (d, x, y) => coins.push({ d, x, y, got: false }); const haz = [];
-  const pv = () => { const z = r(); return z < 0.3 ? 'sedan' : z < 0.5 ? 'pickup' : z < 0.7 ? 'van' : z < 0.8 ? 'truck' : 'bus'; }, pv2 = () => { const z = r(); return z < 0.45 ? 'sedan' : z < 0.75 ? 'pickup' : 'van'; };
+  const pv = () => { const z = r(); return z < 0.1 ? 'sedan' : z < 0.2 ? 'pickup' : z < 0.6 ? 'van' : z < 0.8 ? 'truck' : 'bus'; }, /* véhicules qui barrent une voie : surtout trop hauts pour être sautés */ pv2 = () => { const z = r(); return z < 0.45 ? 'sedan' : z < 0.75 ? 'pickup' : 'van'; };
   // tutoriel : ligne de pièces au centre, aucun obstacle
   for (let d = 10; d <= 46; d += 3) coin(d, 0, 1.0);
   let d = 54, safe = 1, prevEnd = 46, rows = 0, lastPick = 0, prevSafe = 1, combo = false, lastCombo = false;
@@ -49,26 +50,31 @@ export function genLevel(li, si) {
     /* slalom : 3 à 5 rangées rapprochées qui obligent à changer de voie à chaque fois (toutes les autres voies sont barrées) */
     if (!boundary && slal === 0 && rows > 4 && r() < 0.1 + 0.12 * diff) slal = 3 + ((r() * 3) | 0);
     const inSl = slal > 0 && !boundary; if (inSl) { kind = 'free'; combo = false; }
+    const pullNow = rows >= 3 && !inSl && !boundary && !combo && r() < 0.45 + 0.25 * diff; /* voiture qui sort dans TA voie */
+    /* rangée « saut + décalage » : on saute (ou glisse), puis un véhicule surgit dans la même voie : il faut passer sur la voisine presque en même temps */
+    const hopNow = rows > 5 && !inSl && !boundary && !combo && !pullNow && r() < 0.07 + 0.1 * diff; if (hopNow) kind = r() < 0.5 ? 'barrier' : 'beam';
     const opts = [safe - 1, safe + 1].filter(l => l >= 0 && l <= 2);
-    const newSafe = rows < 2 || boundary ? 1 : (combo ? safe : inSl || r() < 0.88 ? opts[(r() * opts.length) | 0] : safe); /* on change presque toujours de voie */
+    const newSafe = rows < 2 || boundary ? 1 : (combo ? safe : inSl || pullNow || r() < 0.88 ? opts[(r() * opts.length) | 0] : safe); /* on change presque toujours de voie */
+    const hopOpts = [newSafe - 1, newSafe + 1].filter(l => l >= 0 && l <= 2), hopT = hopNow ? hopOpts[(r() * hopOpts.length) | 0] : -1; /* voie d’esquive */
+    const endLane = hopNow ? hopT : newSafe; /* voie où l’on se trouve à la fin de la rangée */
     // pièces de la zone de dégagement : le chemin glisse vers la nouvelle voie
     /* danger de la zone : décidé avant, pour élargir l’écart si la voie à quitter est concernée */
     const hOuter = [0, 2].filter(l => l !== newSafe && l !== prevSafe), hLeaves = prevSafe !== newSafe && prevSafe !== 1;
-    const hz = rows >= 2 && !inSl && r() < 0.85 + 0.15 * diff ? { pull: r() < 0.5, early: hLeaves && r() < 0.7 } : null;
+    const hz = hopNow ? null : pullNow ? { pull: true, early: true } : (rows >= 2 && !inSl && r() < 0.5 + 0.2 * diff ? { pull: false, early: hLeaves && r() < 0.7 } : null);
     const hvf = v * (1 + 0.25 * Math.min(1, d / L.len));
-    if (hz && hz.early) d += 0.5 * hvf; /* voie à quitter : il faut laisser le temps de réagir */
+    if (hz && hz.early) d += 0.75 * hvf; /* voie à quitter : il faut laisser le temps de réagir */
     if (hz && !hz.early && !hOuter.length) hz.none = true;
     const g0 = prevEnd + 2, g1 = d - 3;
     for (let dd = g0; dd <= g1; dd += 3) { const u = g1 > g0 ? (dd - g0) / (g1 - g0) : 1; coin(dd, LX[prevSafe] + (LX[newSafe] - LX[prevSafe]) * sm(0.15, 0.85, u), 1.0); }
     /* dangers de la zone : voiture qui sort de son stationnement, objet qui tombe */
     if (hz && !hz.none && g1 - g0 >= 13) {
-      const hl = hz.early ? prevSafe : hOuter[(r() * hOuter.length) | 0], span = g1 - g0, sd = Math.sign(LX[hl]) || 1;
+      const hl = hz.early ? prevSafe : hOuter[(r() * hOuter.length) | 0], span = g1 - g0, sd = hl === 1 ? -(Math.sign(LX[newSafe]) || 1) : Math.sign(LX[hl]); /* sortie du côté opposé à la voie suivante */
       if (hz.pull) {
-        const k = pv2(), len = SIZE[k][0], d0h = hz.early ? prevEnd + 0.75 * hvf + r() * 0.2 * hvf : g0 + 1 + r() * Math.max(0, span - len - 3);
+        const k = pv2(), len = SIZE[k][0], d0h = hz.early ? prevEnd + hvf + r() * 0.15 * hvf : g0 + 1 + r() * Math.max(0, span - len - 3);
         obs.push({ kind: k, lane: hl, x: sd * 5.7, xPark: sd * 5.7, xLane: LX[hl], d0: d0h, d1: d0h + len, len, hw: SIZE[k][1] / 2, top: SIZE[k][2], type: 'block', variant: (r() * 6) | 0, dyn: 'pull', p: 0, on: false });
         haz.push({ d0: d0h, d1: d0h + len, x: LX[hl] });
       } else {
-        const k = r() < 0.5 ? 'crate' : 'barrel', len = SIZE[k][0], d0h = hz.early ? prevEnd + 0.75 * hvf + r() * 0.2 * hvf : g0 + 2 + r() * Math.max(0, span - 6);
+        const k = r() < 0.5 ? 'crate' : 'barrel', len = SIZE[k][0], d0h = hz.early ? prevEnd + hvf + r() * 0.15 * hvf : g0 + 2 + r() * Math.max(0, span - 6);
         obs.push({ kind: k, lane: hl, x: LX[hl], d0: d0h, d1: d0h + len, len, hw: SIZE[k][1] / 2, top: 1.5, type: 'block', variant: (r() * 3) | 0, dyn: 'drop', p: 0, on: false, landed: false, fy: 9 });
         haz.push({ d0: d0h, d1: d0h + len, x: LX[hl] });
       }
@@ -92,8 +98,9 @@ export function genLevel(li, si) {
     // autres voies
     for (let lane = 0; lane < 3; lane++) {
       if (lane === newSafe) continue;
-      const pBlock = inSl ? 1 : Math.min(0.97, (kind === 'free' ? 0.6 : 0.72) + 0.3 * diff);
+      const pBlock = inSl ? 1 : kind === 'free' ? 0.97 : 0.995; /* presque toujours une seule voie praticable */
       if (rows < 2) continue;
+      if (lane === hopT) { const kk = 'van'; rowLen = Math.max(rowLen, addObs(kk, lane, d) ); continue; }
       const q2 = r();
       if (q2 < pBlock) {
         const k = pv(), shift = r() * 2; rowLen = Math.max(rowLen, addObs(k, lane, d + shift) + shift);
@@ -104,17 +111,21 @@ export function genLevel(li, si) {
       }
       else if (q2 < Math.min(0.99, pBlock + 0.25)) { addObs(r() < 0.5 ? 'barrier' : 'beam', lane, d + r() * 2); }
     }
-    rows++; safes.push({ g0, lane: newSafe, from: prevSafe, end: d + rowLen }); prevSafe = newSafe; safe = newSafe; prevEnd = d + rowLen;
+    if (hopNow) { /* le véhicule surgit dans la voie du saut, juste après l’obstacle */
+      const kv = r() < 0.5 ? 'van' : 'truck', vf2 = v * (1 + 0.25 * Math.min(1, d / L.len)), dv = d + 0.72 * vf2, e = addObs(kv, newSafe, dv);
+      safes.push({ g0, lane: newSafe, from: prevSafe, end: d + 6 }); rowLen = Math.max(rowLen, e + 0.72 * vf2); safes.push({ g0: d + 7, lane: hopT, from: newSafe, end: d + rowLen });
+    } else safes.push({ g0, lane: newSafe, from: prevSafe, end: d + rowLen });
+    rows++; prevSafe = endLane; safe = endLane; prevEnd = d + rowLen;
     // bonus
-    if (d - lastPick > 190 && rows > 3) {
-      const t = r(), type = t < 0.28 ? 'aimant' : t < 0.52 ? 'bouclier' : t < 0.7 ? 'envol' : t < 0.88 ? 'x2' : 'coeur';
+    if (d - lastPick > 330 && rows > 3) { /* bonus plus rares ; cœur et ballons très rares */
+      const t = r(), type = t < 0.16 ? 'aimant' : t < 0.30 ? 'bouclier' : t < 0.35 ? 'envol' : t < 0.47 ? 'x2' : t < 0.51 ? 'coeur' : t < 0.63 ? 'ralenti' : t < 0.77 ? 'bottes' : t < 0.89 ? 'repousse' : 'pluie';
       const pd = prevEnd + 5;
-      picks.push({ d: pd, x: LX[newSafe], type, got: false });
-      if (type === 'envol') for (let k = 0; k < 12; k++) coin(pd + 12 + k * 2.6, LX[newSafe], 5.0);
+      picks.push({ d: pd, x: LX[endLane], type, got: false });
+      if (type === 'envol') for (let k = 0; k < 12; k++) coin(pd + 12 + k * 2.6, LX[endLane], 5.0);
       lastPick = d;
     }
     /* série : un second obstacle suit de près sur la même voie (saute, puis glisse) */
-    lastCombo = combo; combo = rows > 3 && !lastCombo && (kind === 'barrier' || kind === 'beam') && r() < 0.18 + 0.4 * diff;
+    lastCombo = combo; combo = rows > 3 && !lastCombo && !hopNow && (kind === 'barrier' || kind === 'beam') && r() < 0.18 + 0.4 * diff;
     const vf = v * (1 + 0.25 * Math.min(1, d / L.len)); /* vitesse réelle à cet endroit : l’écart reste faisable (un saut dure 0,77 s) */
     if (inSl) slal--;
     d = prevEnd + (inSl ? vf * 0.62 + 3 : combo ? vf * 0.8 + 4 : Math.max(9, vf * (0.78 + 0.06 * (1 - Math.min(1, diff))) + r() * 0.08 * vf));
@@ -139,7 +150,7 @@ export function createEngine(canvas, cb = {}) {
   envMap(renderer).then(e => { scene.environment = e; }).catch(() => {});
 
   const S = { mode: 'menu', themeIdx: -1, scen: null, look: Object.assign({}, PRESET.abel), chaserType: 'garde', quality: 'auto', q: 2, w: 1, h: 1, t: 0, paused: false, fpsAcc: 0, fpsN: 0, lowCount: 0 };
-  const P = { d: 0, x: 0, y: 0, vy: 0, lane: 1, grounded: true, coyote: 0, jumpBuf: 0, slide: 0, inv: 0, hitT: 9, hearts: 3, coins: 0, phi: 0, fly: 0, shield: 0, magnet: 0, x2: 0, lost: 0, tired: 0, speedMul: 1, state: 'ready', endT: 0, camShake: 0, flash: 0 };
+  const P = { d: 0, x: 0, y: 0, vy: 0, lane: 1, grounded: true, coyote: 0, jumpBuf: 0, slide: 0, inv: 0, hitT: 9, hearts: 3, coins: 0, phi: 0, fly: 0, shield: 0, magnet: 0, x2: 0, slow: 0, boots: 0, rain: 0, lost: 0, tired: 0, speedMul: 1, state: 'ready', endT: 0, camShake: 0, flash: 0 };
   const C = { gap: 12, x: 0, phi: 0, nextVisit: 20, vphase: 0, vt: 0, near: 0 };
   let runner = null, chaser = null, lev = null, obsGroup = new THREE.Group(), coinMesh = null, pickGroup = new THREE.Group(), finishGroup = null, confetti = null, shieldMesh = null, platform = null;
   scene.add(obsGroup, pickGroup);
@@ -167,9 +178,7 @@ export function createEngine(canvas, cb = {}) {
   function buildChars() {
     if (runner) scene.remove(runner); if (chaser) scene.remove(chaser);
     runner = buildRunner(S.look); scene.add(runner);
-    if (S.chaserType === 'chien') { chaser = buildDog(); chaser.scale.setScalar(1.15); }
-    else if (S.chaserType === 'robot') { chaser = buildRunner(PRESET.robot); chaser.scale.setScalar(1.08); }
-    else { chaser = buildRunner(PRESET.garde); chaser.scale.setScalar(1.08); }
+    chaser = buildChaser(S.chaserType); chaser.scale.setScalar(chaser.userData.sc);
     scene.add(chaser);
     if (!shieldMesh) { shieldMesh = new THREE.Mesh(new THREE.SphereGeometry(1.1, 20, 14), new THREE.MeshBasicMaterial({ color: '#58a8ff', transparent: true, opacity: 0.22, depthWrite: false })); shieldMesh.visible = false; scene.add(shieldMesh); }
     if (!platform) { platform = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.25, 0.12, 40), new THREE.MeshStandardMaterial({ color: '#cfd6e2', roughness: 0.5 })); platform.position.y = -0.06; platform.receiveShadow = true; platform.visible = false; scene.add(platform); }
@@ -199,7 +208,7 @@ export function createEngine(canvas, cb = {}) {
     clearRun(); S.mode = 'play'; S.paused = false; platform.visible = false;
     lev = genLevel(li, si); lev.li = li; lev.totalCoins = lev.coins.length;
     S.lastZ = 0; S.themeIdx === lev.theme && S.scen && (S.scen.dispose(), S.scen = null, S.themeIdx = -1); setTheme(lev.theme);
-    Object.assign(P, { d: 0, x: 0, y: 0, vy: 0, lane: 1, grounded: true, coyote: 0, jumpBuf: 0, slide: 0, inv: 0, hitT: 9, hearts: 3, coins: 0, phi: 0, fly: 0, shield: 0, magnet: 0, x2: 0, lost: 0, tired: 0, speedMul: 1, state: 'run', endT: 0, camShake: 0, flash: 0, vx: 0, airT: 0, jumped: false, land: 0, sk: 0, jk: 0, ended: false });
+    Object.assign(P, { d: 0, x: 0, y: 0, vy: 0, lane: 1, grounded: true, coyote: 0, jumpBuf: 0, slide: 0, inv: 0, hitT: 9, hearts: 3, coins: 0, phi: 0, fly: 0, shield: 0, magnet: 0, x2: 0, slow: 0, boots: 0, rain: 0, lost: 0, tired: 0, speedMul: 1, state: 'run', endT: 0, camShake: 0, flash: 0, vx: 0, airT: 0, jumped: false, land: 0, sk: 0, jk: 0, ended: false });
     Object.assign(C, { gap: 14, x: 1.2, phi: 0, nextVisit: 8 + Math.random() * 4, vphase: 0, vt: 0, near: 0 });
     const cm = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.34, 0.34, 0.07, 28), coinMaterials(), 220); cm.frustumCulled = false; cm.count = 0; cm.castShadow = false; scene.add(cm); coinMesh = cm;
     // arche d’arrivée
@@ -299,13 +308,14 @@ export function createEngine(canvas, cb = {}) {
   /* ---------- mise à jour ---------- */
   const dummy = new THREE.Object3D();
   function stepPlay(dt) {
-    P.hitT += dt; P.inv = Math.max(0, P.inv - dt); P.slide = Math.max(0, P.slide - dt); P.magnet = Math.max(0, P.magnet - dt); P.x2 = Math.max(0, P.x2 - dt); P.fly = Math.max(0, P.fly - dt);
+    P.hitT += dt; P.inv = Math.max(0, P.inv - dt); P.slide = Math.max(0, P.slide - dt); P.magnet = Math.max(0, P.magnet - dt); P.x2 = Math.max(0, P.x2 - dt); P.slow = Math.max(0, P.slow - dt); P.boots = Math.max(0, P.boots - dt); P.rain = Math.max(0, P.rain - dt); P.fly = Math.max(0, P.fly - dt);
     P.flash = Math.max(0, P.flash - dt * 2); P.camShake = Math.max(0, P.camShake - dt);
     const v0 = lev.v * (1 + 0.25 * Math.min(1, P.d / lev.len));
     let spd = v0;
     if (P.state === 'run') spd *= 0.5 + 0.5 * sm(0, 1.3, P.hitT);
     else if (P.state === 'win') spd *= Math.max(0, 1 - P.endT / 2.2);
     else spd *= Math.max(0, 1 - P.endT / 0.9);
+    if (P.slow > 0) spd *= 0.62; /* bonus ralenti : le décor défile moins vite */
     P.speedMul = spd / v0; P.vNow = spd;
     P.d += spd * dt;
     /* changement de voie : ressort amorti (départ et arrivée progressifs, pas de saccade) */
@@ -313,9 +323,9 @@ export function createEngine(canvas, cb = {}) {
     P.land = Math.max(0, P.land - dt / 0.3); if (!P.grounded) P.airT += dt;
     for (const o of lev.dyn) {
       const dist = o.d0 - P.d; if (dist > 400 || dist < -30) continue;
-      if (!o.on && dist < Math.max(P.vNow, 12) * 0.95) o.on = true;
+      if (!o.on && dist < Math.max(P.vNow, 12) * (o.dyn === 'pull' ? 1.0 : 0.95)) o.on = true;
       if (!o.on) continue;
-      if (o.dyn === 'pull') { if (o.p < 1) { o.p = Math.min(1, o.p + dt / 0.75); o.x = o.xPark + (o.xLane - o.xPark) * sm(0, 1, o.p); } }
+      if (o.dyn === 'pull') { if (o.p < 1) { o.p = Math.min(1, o.p + dt / 0.8); o.x = o.xPark + (o.xLane - o.xPark) * sm(0, 1, o.p); } }
       else if (!o.landed) { o.p = Math.min(1, o.p + dt / 0.5); o.fy = 9 * (1 - o.p * o.p); if (o.p >= 1) { o.landed = true; o.fy = 0; emit('thud'); P.camShake = Math.max(P.camShake, 0.15); } }
     }
     const fl = floorAt(P.x, P.d);
@@ -324,7 +334,7 @@ export function createEngine(canvas, cb = {}) {
     else {
       if (P.grounded) P.coyote = 0.1; else P.coyote -= dt;
       P.jumpBuf = Math.max(0, P.jumpBuf - dt);
-      if (P.jumpBuf > 0 && (P.grounded || P.coyote > 0) && P.state === 'run') { P.vy = 10; P.grounded = false; P.coyote = 0; P.jumpBuf = 0; P.slide = 0; P.jumped = true; P.airT = 0; emit('jump'); }
+      if (P.jumpBuf > 0 && (P.grounded || P.coyote > 0) && P.state === 'run') { P.vy = P.boots > 0 ? 12.6 : 10; P.grounded = false; /* bottes : saut plus haut */ P.coyote = 0; P.jumpBuf = 0; P.slide = 0; P.jumped = true; P.airT = 0; emit('jump'); }
       if (!P.grounded || P.y > fl + 0.001 || P.vy > 0) { P.vy -= 26 * dt; P.y += P.vy * dt; }
       if (P.y <= fl) { if (!P.grounded) { P.land = P.airT > 0.18 ? 1 : 0; P.jumped = false; P.airT = 0; } if (!P.grounded && P.slidePending) { P.slide = 0.75; P.slidePending = false; emit('slide'); } P.y = fl; P.vy = 0; P.grounded = true; } else P.grounded = false;
     }
@@ -342,12 +352,12 @@ export function createEngine(canvas, cb = {}) {
       const c = lev.coins[i]; if (c.d > P.d + 130) break; if (c.got) continue;
       const dd = c.d - P.d;
       if (P.magnet > 0 && dd > -1 && dd < 9 && Math.abs(c.x - P.x) < 5) { const k = Math.min(1, dt * 9); c.d -= dd * k; c.x += (P.x - c.x) * k; c.y += (pc - c.y) * k; }
-      if (Math.abs(c.d - P.d) < 1.1 && Math.abs(c.x - P.x) < 1.3 && Math.abs(c.y - pc) < 1.5 && P.state !== 'lose') { c.got = true; P.coins += P.x2 > 0 ? 2 : 1; emit('coin'); }
+      if (Math.abs(c.d - P.d) < 1.1 && Math.abs(c.x - P.x) < 1.3 && Math.abs(c.y - pc) < 1.5 && P.state !== 'lose') { c.got = true; P.coins += P.rain > 0 ? 3 : P.x2 > 0 ? 2 : 1; emit('coin'); }
     }
     for (const p of lev.picks) {
       if (p.got) continue; if (Math.abs(p.d - P.d) < 1.3 && Math.abs(p.x - P.x) < 1.5 && Math.abs(1.5 - pc) < 1.6 + (P.y > 0.5 ? 0.8 : 0)) {
         p.got = true; p.sp.visible = false; emit('power');
-        if (p.type === 'aimant') P.magnet = POWERS.aimant.dur; else if (p.type === 'bouclier') P.shield = POWERS.bouclier.dur; else if (p.type === 'envol') { P.fly = POWERS.envol.dur; P.inv = Math.max(P.inv, POWERS.envol.dur + 0.6); } else if (p.type === 'x2') P.x2 = POWERS.x2.dur; else if (p.type === 'coeur') { if (P.hearts < 3) P.hearts++; else P.coins += 5; }
+        if (p.type === 'aimant') P.magnet = POWERS.aimant.dur; else if (p.type === 'bouclier') P.shield = POWERS.bouclier.dur; else if (p.type === 'envol') { P.fly = POWERS.envol.dur; P.inv = Math.max(P.inv, POWERS.envol.dur + 0.6); } else if (p.type === 'x2') P.x2 = POWERS.x2.dur; else if (p.type === 'ralenti') P.slow = POWERS.ralenti.dur; else if (p.type === 'bottes') P.boots = POWERS.bottes.dur; else if (p.type === 'pluie') P.rain = POWERS.pluie.dur; else if (p.type === 'repousse') { C.gap += 14; C.vphase = 0; C.nextVisit = 16; C.near = 0; } else if (p.type === 'coeur') { if (P.hearts < 3) P.hearts++; else P.coins += 5; }
       }
     }
     if (P.shield > 0 && P.state === 'run') P.shield -= dt;
@@ -359,13 +369,13 @@ export function createEngine(canvas, cb = {}) {
     C.gap += (tg - C.gap) * Math.min(1, dt * 2.2);
     let cxT = P.x - 1.15; if (P.x < -2) cxT = P.x + 1.15; C.x += (cxT - C.x) * Math.min(1, dt * 4);
     P.phi += dt * (spd > 0.5 ? CADENCE : 0);
-    C.phi += dt * CADENCE * (S.chaserType === 'chien' ? 1.2 : 1);
+    C.phi += dt * CADENCE * (chaser.userData.cad || 1);
     spawnLive(); S.scen.update(-P.d, dt, cam, S.t);
     hudT.t -= dt; if (hudT.t <= 0) { hudT.t = 0.1; sendHud(); }
   }
   function sendHud() {
     if (!cb.onHud) return;
-    cb.onHud({ hearts: P.hearts, coins: P.coins, prog: clamp(P.d / lev.len, 0, 1), powers: [['aimant', P.magnet, POWERS.aimant.dur], ['bouclier', P.shield, POWERS.bouclier.dur], ['envol', P.fly, POWERS.envol.dur], ['x2', P.x2, POWERS.x2.dur]].filter(a => a[1] > 0).map(a => ({ id: a[0], f: a[1] / a[2] })), chaser: C.gap < 7 });
+    cb.onHud({ hearts: P.hearts, coins: P.coins, prog: clamp(P.d / lev.len, 0, 1), powers: [['aimant', P.magnet, POWERS.aimant.dur], ['bouclier', P.shield, POWERS.bouclier.dur], ['envol', P.fly, POWERS.envol.dur], ['x2', P.x2, POWERS.x2.dur], ['ralenti', P.slow, POWERS.ralenti.dur], ['bottes', P.boots, POWERS.bottes.dur], ['pluie', P.rain, POWERS.pluie.dur]].filter(a => a[1] > 0).map(a => ({ id: a[0], f: a[1] / a[2] })), chaser: C.gap < 7 });
   }
   function finishRun(win) {
     const total = lev.totalCoins, ratio = total ? P.coins / total : 0;
@@ -398,7 +408,7 @@ export function createEngine(canvas, cb = {}) {
     runner.visible = P.inv > 0 && P.state === 'run' && P.fly <= 0 ? Math.floor(S.t * 14) % 2 === 0 : true;
     shieldMesh.visible = P.shield > 0; shieldMesh.position.set(P.x, P.y + 0.95, -P.d); shieldMesh.scale.setScalar(1 + Math.sin(S.t * 6) * 0.03);
     chaser.visible = C.gap < 9; chaser.position.set(C.x, 0, -P.d + C.gap); chaser.rotation.set(0, 0, 0);
-    if (chaser.userData.kind === 'dog') poseDog(chaser, { phi: C.phi, t: S.t + 2 }); else poseRunner(chaser, { phi: C.phi * 0.95 + 1.3, t: S.t + 3, speed: 1, tired: 0 });
+    poseChaser(chaser, C.phi, S.t, { tired: 0 });
     /* caméra */
     const cx = P.x * 0.85, shake = P.camShake > 0 ? Math.sin(S.t * 80) * 0.05 * P.camShake : 0;
     const win = P.state === 'win' ? sm(0.4, 2, P.endT) : 0;
@@ -413,21 +423,26 @@ export function createEngine(canvas, cb = {}) {
     const z = S.mz; runner.position.set(0, 0, z); runner.rotation.set(0, 0, 0);
     poseRunner(runner, { phi: P.phi, t: S.t, speed: 0.9 });
     chaser.visible = true; chaser.position.set(-1.6, 0, z + 4.2); chaser.rotation.set(0, 0, 0); C.phi += dt * 12;
-    if (chaser.userData.kind === 'dog') poseDog(chaser, { phi: C.phi * 1.1, t: S.t }); else poseRunner(chaser, { phi: C.phi * 0.95 + 1.3, t: S.t + 3, speed: 1 });
+    poseChaser(chaser, C.phi * 1.1, S.t, {});
     S.scen.update(z, dt, cam, S.t, true);
     const asp = S.w / S.h, dist = asp < 0.7 ? 5.6 : 4.6;
     const a = S.t * 0.25; cam.position.set(2.4 + Math.sin(a) * 0.8, 1.55, z - dist); cam.lookAt(-0.2, asp < 0.7 ? 0.2 : 0.7, z + 0.4); cam.fov = 55; cam.updateProjectionMatrix();
     sun.position.set(-8, 14, z + 6); sun.target.position.set(0, 0, z); sun.target.updateMatrixWorld();
   }
+  /* pose d’un poursuivant selon son type d’animation */
+  function poseChaser(c, phi, t, extra) {
+    const k = c.userData.kind;
+    if (k === 'dog') poseDog(c, { phi, t: t + 2 }); else if (k === 'drone') poseDrone(c, { t }); else poseRunner(c, Object.assign({ phi: phi * 0.95 + 1.3, t: t + 3, speed: 1 }, extra));
+  }
   function poseShop(dt) {
     const z = S.mz, sub = shop.subject === 'chaser' ? chaser : runner, other = sub === runner ? chaser : runner;
-    other.visible = false; sub.visible = true; sub.scale.setScalar(sub === chaser && chaser.userData.kind !== 'dog' ? 1.08 : sub === chaser ? 1.15 : 1);
+    other.visible = false; sub.visible = true; sub.scale.setScalar(sub === chaser ? chaser.userData.sc : 1);
     shop.yawNow += (shop.yaw - shop.yawNow) * Math.min(1, dt * 4);
     const sway = Math.sin(S.t * 0.6) * 0.45;
     sub.position.set(0, 0, z); sub.rotation.set(0, shop.yawNow + sway, 0); platform.position.set(0, -0.06, z);
-    if (sub.userData.kind === 'dog') poseDog(sub, { phi: S.t * 3, t: S.t }); else poseRunner(sub, { phi: S.t * 4, idle: 1, t: S.t, speed: 0.4 });
+    if (sub.userData.kind === 'dog') poseDog(sub, { phi: S.t * 3, t: S.t }); else if (sub.userData.kind === 'drone') poseDrone(sub, { t: S.t }); else poseRunner(sub, { phi: S.t * 4, idle: 1, t: S.t, speed: 0.4 });
     const asp = S.w / S.h, f = shop.focus, k = asp < 0.7 ? 1.25 : 1;
-    const V = { body: [1.2, 4.1 * k, 0.6], head: [1.72, 2.2 * k, 1.36], feet: [0.5, 2.1 * k, 0.12], back: [1.2, 4.1 * k, 0.6], chaser: [0.95, 3.8 * k, 0.42], level: [1.9, 6.6 * k, 1.0] }[sub === chaser ? 'chaser' : f] || [1.2, 4.1, 0.6];
+    const V = { body: [1.2, 4.1 * k, 0.6], head: [1.72, 2.2 * k, 1.36], feet: [0.5, 2.1 * k, 0.12], back: [1.2, 4.1 * k, 0.6], chaser: [chaser.userData.cy * chaser.userData.sc * (chaser.userData.kind === 'drone' ? 1 : 1) + 0.3, Math.max(2.6, chaser.userData.hh * chaser.userData.sc * 3.4) * k, chaser.userData.cy * (chaser.userData.kind === 'drone' ? 1 : chaser.userData.sc)], level: [1.9, 6.6 * k, 1.0] }[sub === chaser ? 'chaser' : f] || [1.2, 4.1, 0.6];
     cam.position.set(0, V[0], z - V[1]); cam.lookAt(0, V[2], z); cam.fov = 40; cam.updateProjectionMatrix();
     S.scen.update(z, dt, cam, S.t, true);
     sun.position.set(-5, 8, z - 6); sun.target.position.set(0, 0, z); sun.target.updateMatrixWorld();
